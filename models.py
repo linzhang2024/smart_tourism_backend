@@ -44,3 +44,4 @@ class Ticket(Base):
     tourist = relationship("Tourist", back_populates="tickets")
     scenic_spot = relationship("ScenicSpot", back_populates="tickets")
 #122
+#12
