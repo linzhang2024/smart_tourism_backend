@@ -25,6 +25,8 @@ class ScenicSpot(Base):
     location = Column(String(200))
     rating = Column(Float, default=0.0)
     price = Column(Float, default=0.0)
+    total_inventory = Column(Integer, default=100)
+    remained_inventory = Column(Integer, default=100)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tickets = relationship("Ticket", back_populates="scenic_spot")
@@ -43,5 +45,3 @@ class Ticket(Base):
     
     tourist = relationship("Tourist", back_populates="tickets")
     scenic_spot = relationship("ScenicSpot", back_populates="tickets")
-#122
-#12

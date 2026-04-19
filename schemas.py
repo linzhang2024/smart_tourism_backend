@@ -35,6 +35,8 @@ class ScenicSpotBase(BaseModel):
     location: Optional[str] = Field(None, max_length=200, description="景点位置")
     rating: Optional[float] = Field(0.0, ge=0, le=5, description="景点评分")
     price: Optional[float] = Field(0.0, ge=0, description="景点门票价格")
+    total_inventory: Optional[int] = Field(100, ge=0, description="总库存")
+    remained_inventory: Optional[int] = Field(100, ge=0, description="剩余库存")
 
 
 class ScenicSpotCreate(ScenicSpotBase):
@@ -47,6 +49,8 @@ class ScenicSpotUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=200)
     rating: Optional[float] = Field(None, ge=0, le=5)
     price: Optional[float] = Field(None, ge=0)
+    total_inventory: Optional[int] = Field(None, ge=0)
+    remained_inventory: Optional[int] = Field(None, ge=0)
 
 
 class ScenicSpot(ScenicSpotBase):
@@ -95,3 +99,15 @@ class ScenicSpotWithTickets(ScenicSpot):
 class TicketWithDetails(Ticket):
     tourist: Tourist
     scenic_spot: ScenicSpot
+
+
+class ScenicSpotInventoryAlert(BaseModel):
+    id: int
+    name: str
+    total_inventory: int
+    remained_inventory: int
+    inventory_ratio: float
+    is_low_inventory: bool
+
+    class Config:
+        from_attributes = True

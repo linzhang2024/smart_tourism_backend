@@ -133,6 +133,14 @@ def create_ticket(ticket: schemas.TicketCreate, db: Session = Depends(get_db)):
     if scenic_spot is None:
         raise HTTPException(status_code=404, detail="景点不存在")
     
+    if scenic_spot.remained_inventory < ticket.quantity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"库存不足，当前剩余库存: {scenic_spot.remained_inventory}"
+        )
+    
+    scenic_spot.remained_inventory -= ticket.quantity
+    
     total_price = scenic_spot.price * ticket.quantity
     
     db_ticket = models.Ticket(
@@ -143,6 +151,7 @@ def create_ticket(ticket: schemas.TicketCreate, db: Session = Depends(get_db)):
     )
     db.add(db_ticket)
     db.commit()
+    db.refresh(scenic_spot)
     db.refresh(db_ticket)
     return db_ticket
 
@@ -190,6 +199,53 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     db.delete(db_ticket)
     db.commit()
     return None
+
+
+@app.get("/scenic-spots/{spot_id}/inventory-status", response_model=schemas.ScenicSpotInventoryAlert)
+def get_inventory_status(spot_id: int, db: Session = Depends(get_db)):
+    spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == spot_id).first()
+    if spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    if spot.total_inventory == 0:
+        inventory_ratio = 0.0
+    else:
+        inventory_ratio = spot.remained_inventory / spot.total_inventory
+    
+    is_low_inventory = inventory_ratio < 0.10
+    
+    return schemas.ScenicSpotInventoryAlert(
+        id=spot.id,
+        name=spot.name,
+        total_inventory=spot.total_inventory,
+        remained_inventory=spot.remained_inventory,
+        inventory_ratio=round(inventory_ratio, 4),
+        is_low_inventory=is_low_inventory
+    )
+
+
+@app.get("/scenic-spots/low-alert", response_model=List[schemas.ScenicSpotInventoryAlert])
+def get_low_inventory_spots(db: Session = Depends(get_db)):
+    spots = db.query(models.ScenicSpot).all()
+    low_inventory_spots = []
+    
+    for spot in spots:
+        if spot.total_inventory == 0:
+            inventory_ratio = 0.0
+        else:
+            inventory_ratio = spot.remained_inventory / spot.total_inventory
+        
+        if inventory_ratio < 0.10:
+            low_inventory_spots.append(schemas.ScenicSpotInventoryAlert(
+                id=spot.id,
+                name=spot.name,
+                total_inventory=spot.total_inventory,
+                remained_inventory=spot.remained_inventory,
+                inventory_ratio=round(inventory_ratio, 4),
+                is_low_inventory=True
+            ))
+    
+    return low_inventory_spots
 
 
 @app.get("/")
