@@ -1,69 +1,13 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import List, Optional
 from datetime import datetime
-from enum import Enum
 
 
-class TicketStatus(str, Enum):
-    valid = "valid"
-    used = "used"
-    expired = "expired"
-    cancelled = "cancelled"
-
-
-class ScenicSpotBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, description="景点名称")
-    description: Optional[str] = Field(None, max_length=500, description="景点描述")
-    location: Optional[str] = Field(None, max_length=200, description="景点位置")
-    rating: Optional[float] = Field(None, ge=0, le=5, description="评分")
-    image_url: Optional[str] = Field(None, max_length=200, description="图片URL")
-    total_inventory: Optional[int] = Field(100, ge=0, description="总库存")
-    remained_inventory: Optional[int] = Field(100, ge=0, description="剩余库存")
-    alert_threshold: Optional[float] = Field(10.0, ge=0, le=100, description="预警阈值百分比")
-
-
-class ScenicSpotCreate(ScenicSpotBase):
-    pass
-
-
-class ScenicSpotUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = Field(None, max_length=500)
-    location: Optional[str] = Field(None, max_length=200)
-    rating: Optional[float] = Field(None, ge=0, le=5)
-    image_url: Optional[str] = Field(None, max_length=200)
-    total_inventory: Optional[int] = Field(None, ge=0)
-    remained_inventory: Optional[int] = Field(None, ge=0)
-    alert_threshold: Optional[float] = Field(None, ge=0, le=100)
-
-
-class ScenicSpotResponse(ScenicSpotBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ScenicSpotInventoryAlert(BaseModel):
-    id: int
-    name: str
-    total_inventory: int
-    remained_inventory: int
-    inventory_percentage: float
-    alert_threshold: float
-    is_low_inventory: bool = False
-
-    class Config:
-        from_attributes = True
-
-
+# Tourist schemas
 class TouristBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=50, description="游客姓名")
-    id_card: str = Field(..., min_length=18, max_length=18, description="身份证号")
-    phone: Optional[str] = Field(None, max_length=15, description="手机号码")
-    email: Optional[str] = Field(None, max_length=100, description="邮箱")
+    name: str = Field(..., min_length=1, max_length=100, description="游客姓名")
+    email: str = Field(..., description="游客邮箱")
+    phone: Optional[str] = Field(None, max_length=20, description="游客电话")
 
 
 class TouristCreate(TouristBase):
@@ -71,28 +15,57 @@ class TouristCreate(TouristBase):
 
 
 class TouristUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=50)
-    id_card: Optional[str] = Field(None, min_length=18, max_length=18)
-    phone: Optional[str] = Field(None, max_length=15)
-    email: Optional[str] = Field(None, max_length=100)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    email: Optional[str] = None
+    phone: Optional[str] = Field(None, max_length=20)
 
 
-class TouristResponse(TouristBase):
+class Tourist(TouristBase):
     id: int
     created_at: datetime
-    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 
+# ScenicSpot schemas
+class ScenicSpotBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200, description="景点名称")
+    description: Optional[str] = Field(None, description="景点描述")
+    location: Optional[str] = Field(None, max_length=200, description="景点位置")
+    rating: Optional[float] = Field(0.0, ge=0, le=5, description="景点评分")
+    price: Optional[float] = Field(0.0, ge=0, description="景点门票价格")
+    total_inventory: Optional[int] = Field(100, ge=0, description="总库存")
+    remained_inventory: Optional[int] = Field(100, ge=0, description="剩余库存")
+
+
+class ScenicSpotCreate(ScenicSpotBase):
+    pass
+
+
+class ScenicSpotUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    location: Optional[str] = Field(None, max_length=200)
+    rating: Optional[float] = Field(None, ge=0, le=5)
+    price: Optional[float] = Field(None, ge=0)
+    total_inventory: Optional[int] = Field(None, ge=0)
+    remained_inventory: Optional[int] = Field(None, ge=0)
+
+
+class ScenicSpot(ScenicSpotBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Ticket schemas
 class TicketBase(BaseModel):
-    scenic_spot_id: int = Field(..., description="景点ID")
     tourist_id: int = Field(..., description="游客ID")
-    ticket_type: str = Field(..., max_length=50, description="门票类型")
-    price: float = Field(..., gt=0, description="价格")
-    valid_date: Optional[datetime] = Field(None, description="有效日期")
-    status: TicketStatus = Field(default=TicketStatus.valid, description="状态")
+    scenic_spot_id: int = Field(..., description="景点ID")
+    quantity: int = Field(1, ge=1, description="门票数量")
 
 
 class TicketCreate(TicketBase):
@@ -100,27 +73,41 @@ class TicketCreate(TicketBase):
 
 
 class TicketUpdate(BaseModel):
-    scenic_spot_id: Optional[int] = Field(None)
-    tourist_id: Optional[int] = Field(None)
-    ticket_type: Optional[str] = Field(None, max_length=50)
-    price: Optional[float] = Field(None, gt=0)
-    valid_date: Optional[datetime] = Field(None)
-    status: Optional[TicketStatus] = Field(None)
+    quantity: Optional[int] = Field(None, ge=1)
+    status: Optional[str] = Field(None, max_length=20)
 
 
-class TicketResponse(TicketBase):
+class Ticket(TicketBase):
     id: int
+    total_price: float
     purchase_date: datetime
-    created_at: datetime
-    updated_at: datetime
+    status: str
 
     class Config:
         from_attributes = True
 
 
-class ScenicSpotWithTickets(ScenicSpotResponse):
-    tickets: List[TicketResponse] = []
+# Response schemas with relationships
+class TouristWithTickets(Tourist):
+    tickets: List[Ticket] = []
 
 
-class TouristWithTickets(TouristResponse):
-    tickets: List[TicketResponse] = []
+class ScenicSpotWithTickets(ScenicSpot):
+    tickets: List[Ticket] = []
+
+
+class TicketWithDetails(Ticket):
+    tourist: Tourist
+    scenic_spot: ScenicSpot
+
+
+class ScenicSpotInventoryAlert(BaseModel):
+    id: int
+    name: str
+    total_inventory: int
+    remained_inventory: int
+    inventory_ratio: float
+    is_low_inventory: bool
+
+    class Config:
+        from_attributes = True
