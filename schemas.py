@@ -19,6 +19,7 @@ class ScenicSpotBase(BaseModel):
     image_url: Optional[str] = Field(None, max_length=200, description="图片URL")
     total_inventory: Optional[int] = Field(100, ge=0, description="总库存")
     remained_inventory: Optional[int] = Field(100, ge=0, description="剩余库存")
+    alert_threshold: Optional[float] = Field(10.0, ge=0, le=100, description="预警阈值百分比")
 
 
 class ScenicSpotCreate(ScenicSpotBase):
@@ -33,6 +34,7 @@ class ScenicSpotUpdate(BaseModel):
     image_url: Optional[str] = Field(None, max_length=200)
     total_inventory: Optional[int] = Field(None, ge=0)
     remained_inventory: Optional[int] = Field(None, ge=0)
+    alert_threshold: Optional[float] = Field(None, ge=0, le=100)
 
 
 class ScenicSpotResponse(ScenicSpotBase):
@@ -41,7 +43,7 @@ class ScenicSpotResponse(ScenicSpotBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ScenicSpotInventoryAlert(BaseModel):
@@ -50,10 +52,11 @@ class ScenicSpotInventoryAlert(BaseModel):
     total_inventory: int
     remained_inventory: int
     inventory_percentage: float
+    alert_threshold: float
     is_low_inventory: bool = False
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class TouristBase(BaseModel):
@@ -80,7 +83,7 @@ class TouristResponse(TouristBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class TicketBase(BaseModel):
@@ -112,7 +115,7 @@ class TicketResponse(TicketBase):
     updated_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class ScenicSpotWithTickets(ScenicSpotResponse):

@@ -2,17 +2,44 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from typing import List
+from contextlib import asynccontextmanager
 
 import models
 import schemas
 from database import engine, get_db
 
-models.Base.metadata.create_all(bind=engine)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    models.Base.metadata.create_all(bind=engine)
+    
+    print("\n" + "=" * 60)
+    print("  智慧旅游管理系统 API 已启动！")
+    print("=" * 60)
+    print("")
+    print("  访问地址：")
+    print("  ┌─────────────────────────────────────────────────────┐")
+    print("  │  主页面:    http://localhost:8000/                  │")
+    print("  │  API 文档:  http://localhost:8000/docs              │")
+    print("  │  备选文档:  http://localhost:8000/redoc             │")
+    print("  │  OpenAPI:   http://localhost:8000/openapi.json      │")
+    print("  └─────────────────────────────────────────────────────┘")
+    print("")
+    print("  提示：点击 http://localhost:8000/docs 可以直接测试 API")
+    print("  按 Ctrl+C 可以停止服务器")
+    print("")
+    print("=" * 60)
+    
+    yield
+    
+    print("\n  智慧旅游管理系统 API 已停止。")
+
 
 app = FastAPI(
     title="智慧旅游管理系统",
     description="一个基于 FastAPI 的智慧旅游项目管理后台",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 app.add_middleware(
@@ -88,7 +115,7 @@ def get_scenic_spot_inventory_status(scenic_spot_id: int, db: Session = Depends(
     if db_scenic_spot.total_inventory > 0:
         inventory_percentage = (db_scenic_spot.remained_inventory / db_scenic_spot.total_inventory) * 100
     
-    is_low_inventory = inventory_percentage < 10.0
+    is_low_inventory = inventory_percentage < db_scenic_spot.alert_threshold
     
     alert_response = schemas.ScenicSpotInventoryAlert(
         id=db_scenic_spot.id,
@@ -96,6 +123,7 @@ def get_scenic_spot_inventory_status(scenic_spot_id: int, db: Session = Depends(
         total_inventory=db_scenic_spot.total_inventory,
         remained_inventory=db_scenic_spot.remained_inventory,
         inventory_percentage=round(inventory_percentage, 2),
+        alert_threshold=db_scenic_spot.alert_threshold,
         is_low_inventory=is_low_inventory
     )
     
@@ -112,7 +140,7 @@ def get_low_inventory_alert(db: Session = Depends(get_db)):
         if spot.total_inventory > 0:
             inventory_percentage = (spot.remained_inventory / spot.total_inventory) * 100
         
-        is_low_inventory = inventory_percentage < 10.0
+        is_low_inventory = inventory_percentage < spot.alert_threshold
         
         if is_low_inventory:
             low_inventory_spots.append(schemas.ScenicSpotInventoryAlert(
@@ -121,6 +149,7 @@ def get_low_inventory_alert(db: Session = Depends(get_db)):
                 total_inventory=spot.total_inventory,
                 remained_inventory=spot.remained_inventory,
                 inventory_percentage=round(inventory_percentage, 2),
+                alert_threshold=spot.alert_threshold,
                 is_low_inventory=True
             ))
     

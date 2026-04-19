@@ -45,14 +45,16 @@ def test_create_scenic_spot_with_inventory():
             "location": "测试地址",
             "rating": 4.5,
             "total_inventory": 100,
-            "remained_inventory": 100
+            "remained_inventory": 100,
+            "alert_threshold": 10.0
         },
     )
     assert response.status_code == 201, f"创建景点失败: {response.json()}"
     data = response.json()
     assert data["total_inventory"] == 100, "总库存设置不正确"
     assert data["remained_inventory"] == 100, "剩余库存设置不正确"
-    print(f"  ✓ 景点创建成功，总库存: {data['total_inventory']}, 剩余库存: {data['remained_inventory']}")
+    assert data["alert_threshold"] == 10.0, "预警阈值设置不正确"
+    print(f"  ✓ 景点创建成功，总库存: {data['total_inventory']}, 剩余库存: {data['remained_inventory']}, 预警阈值: {data['alert_threshold']}%")
     return data["id"]
 
 
@@ -120,14 +122,15 @@ def test_inventory_deduction(scenic_spot_id, tourist_id):
 def test_low_inventory_alert():
     print("\n测试 4: 测试低库存预警...")
     
-    print("  创建低库存景点 (总库存 10, 剩余库存 0)...")
+    print("  创建低库存景点 (总库存 10, 剩余库存 0, 预警阈值 10%)...")
     response = client.post(
         "/scenic-spots/",
         json={
             "name": "低库存景点",
             "description": "用于测试低库存预警",
             "total_inventory": 10,
-            "remained_inventory": 0
+            "remained_inventory": 0,
+            "alert_threshold": 10.0
         },
     )
     assert response.status_code == 201, f"创建景点失败: {response.json()}"
@@ -140,20 +143,23 @@ def test_low_inventory_alert():
     
     print(f"  总库存: {data['total_inventory']}")
     print(f"  剩余库存: {data['remained_inventory']}")
+    print(f"  预警阈值: {data['alert_threshold']}%")
     print(f"  库存百分比: {data['inventory_percentage']}%")
     print(f"  是否低库存: {data['is_low_inventory']}")
     
     assert data["is_low_inventory"] == True, "低库存预警标志应该为 True"
     assert data["inventory_percentage"] == 0.0, "库存百分比应该为 0%"
+    assert data["alert_threshold"] == 10.0, "预警阈值应该为 10%"
     
-    print("  创建正常库存景点 (总库存 100, 剩余库存 50)...")
+    print("  创建正常库存景点 (总库存 100, 剩余库存 50, 预警阈值 10%)...")
     response = client.post(
         "/scenic-spots/",
         json={
             "name": "正常库存景点",
             "description": "用于测试正常库存",
             "total_inventory": 100,
-            "remained_inventory": 50
+            "remained_inventory": 50,
+            "alert_threshold": 10.0
         },
     )
     assert response.status_code == 201, f"创建景点失败: {response.json()}"
@@ -166,11 +172,13 @@ def test_low_inventory_alert():
     
     print(f"  总库存: {data['total_inventory']}")
     print(f"  剩余库存: {data['remained_inventory']}")
+    print(f"  预警阈值: {data['alert_threshold']}%")
     print(f"  库存百分比: {data['inventory_percentage']}%")
     print(f"  是否低库存: {data['is_low_inventory']}")
     
     assert data["is_low_inventory"] == False, "正常库存预警标志应该为 False"
     assert data["inventory_percentage"] == 50.0, "库存百分比应该为 50%"
+    assert data["alert_threshold"] == 10.0, "预警阈值应该为 10%"
     
     print("  ✓ 低库存预警测试通过")
 
@@ -184,7 +192,7 @@ def test_get_all_low_inventory_spots():
     
     print(f"  低库存景点数量: {len(data)}")
     for spot in data:
-        print(f"  - {spot['name']}: 总库存 {spot['total_inventory']}, 剩余库存 {spot['remained_inventory']}, 百分比 {spot['inventory_percentage']}%")
+        print(f"  - {spot['name']}: 总库存 {spot['total_inventory']}, 剩余库存 {spot['remained_inventory']}, 阈值 {spot['alert_threshold']}%, 百分比 {spot['inventory_percentage']}%")
     
     assert len(data) >= 1, "应该至少有一个低库存景点"
     
@@ -201,7 +209,8 @@ def test_out_of_stock():
             "name": "零库存景点",
             "description": "用于测试库存不足",
             "total_inventory": 0,
-            "remained_inventory": 0
+            "remained_inventory": 0,
+            "alert_threshold": 10.0
         },
     )
     assert response.status_code == 201, f"创建景点失败: {response.json()}"
@@ -227,54 +236,184 @@ def test_out_of_stock():
     print("  ✓ 库存不足错误处理测试通过")
 
 
-def test_10_percent_threshold():
-    print("\n测试 7: 测试 10% 库存阈值...")
+def test_different_alert_thresholds():
+    print("\n测试 7: 测试不同景点设置不同预警阈值...")
     
-    print("  创建总库存 100, 剩余库存 9 的景点 (9% < 10%, 应该触发预警)...")
+    print("  场景 1: 景点 A - 预警阈值 30%")
+    print("  创建景点 A (总库存 100, 剩余库存 25, 预警阈值 30%)...")
+    print("  25% < 30% → 应该触发预警")
     response = client.post(
         "/scenic-spots/",
         json={
-            "name": "临界库存景点",
-            "description": "用于测试 10% 阈值",
+            "name": "高阈值景点 A",
+            "description": "预警阈值 30%",
             "total_inventory": 100,
-            "remained_inventory": 9
+            "remained_inventory": 25,
+            "alert_threshold": 30.0
         },
     )
     assert response.status_code == 201, f"创建景点失败: {response.json()}"
-    spot_id = response.json()["id"]
+    spot_a_id = response.json()["id"]
     
-    response = client.get(f"/scenic-spots/{spot_id}/inventory-status")
+    response = client.get(f"/scenic-spots/{spot_a_id}/inventory-status")
     data = response.json()
     
     print(f"  库存百分比: {data['inventory_percentage']}%")
+    print(f"  预警阈值: {data['alert_threshold']}%")
     print(f"  是否低库存: {data['is_low_inventory']}")
     
-    assert data["is_low_inventory"] == True, "9% 库存应该触发预警"
-    assert data["inventory_percentage"] == 9.0, "库存百分比应该为 9%"
+    assert data["alert_threshold"] == 30.0, "预警阈值应该为 30%"
+    assert data["inventory_percentage"] == 25.0, "库存百分比应该为 25%"
+    assert data["is_low_inventory"] == True, "25% < 30% 应该触发预警"
     
-    print("  创建总库存 100, 剩余库存 10 的景点 (10% 不触发预警)...")
+    print("  ✓ 场景 1 通过")
+    
+    print("\n  场景 2: 景点 B - 预警阈值 20%")
+    print("  创建景点 B (总库存 100, 剩余库存 25, 预警阈值 20%)...")
+    print("  25% > 20% → 不触发预警")
     response = client.post(
         "/scenic-spots/",
         json={
-            "name": "刚好 10% 库存景点",
-            "description": "用于测试 10% 阈值边界",
+            "name": "中阈值景点 B",
+            "description": "预警阈值 20%",
             "total_inventory": 100,
-            "remained_inventory": 10
+            "remained_inventory": 25,
+            "alert_threshold": 20.0
         },
     )
     assert response.status_code == 201, f"创建景点失败: {response.json()}"
-    spot_id = response.json()["id"]
+    spot_b_id = response.json()["id"]
     
-    response = client.get(f"/scenic-spots/{spot_id}/inventory-status")
+    response = client.get(f"/scenic-spots/{spot_b_id}/inventory-status")
     data = response.json()
     
     print(f"  库存百分比: {data['inventory_percentage']}%")
+    print(f"  预警阈值: {data['alert_threshold']}%")
     print(f"  是否低库存: {data['is_low_inventory']}")
     
-    assert data["is_low_inventory"] == False, "10% 库存不应该触发预警"
-    assert data["inventory_percentage"] == 10.0, "库存百分比应该为 10%"
+    assert data["alert_threshold"] == 20.0, "预警阈值应该为 20%"
+    assert data["inventory_percentage"] == 25.0, "库存百分比应该为 25%"
+    assert data["is_low_inventory"] == False, "25% > 20% 不应该触发预警"
     
-    print("  ✓ 10% 库存阈值测试通过")
+    print("  ✓ 场景 2 通过")
+    
+    print("\n  场景 3: 景点 C - 预警阈值 50%")
+    print("  创建景点 C (总库存 100, 剩余库存 45, 预警阈值 50%)...")
+    print("  45% < 50% → 应该触发预警")
+    response = client.post(
+        "/scenic-spots/",
+        json={
+            "name": "超高阈值景点 C",
+            "description": "预警阈值 50%",
+            "total_inventory": 100,
+            "remained_inventory": 45,
+            "alert_threshold": 50.0
+        },
+    )
+    assert response.status_code == 201, f"创建景点失败: {response.json()}"
+    spot_c_id = response.json()["id"]
+    
+    response = client.get(f"/scenic-spots/{spot_c_id}/inventory-status")
+    data = response.json()
+    
+    print(f"  库存百分比: {data['inventory_percentage']}%")
+    print(f"  预警阈值: {data['alert_threshold']}%")
+    print(f"  是否低库存: {data['is_low_inventory']}")
+    
+    assert data["alert_threshold"] == 50.0, "预警阈值应该为 50%"
+    assert data["inventory_percentage"] == 45.0, "库存百分比应该为 45%"
+    assert data["is_low_inventory"] == True, "45% < 50% 应该触发预警"
+    
+    print("  ✓ 场景 3 通过")
+    
+    print("\n  场景 4: 景点 D - 预警阈值 5%")
+    print("  创建景点 D (总库存 100, 剩余库存 8, 预警阈值 5%)...")
+    print("  8% > 5% → 不触发预警")
+    response = client.post(
+        "/scenic-spots/",
+        json={
+            "name": "低阈值景点 D",
+            "description": "预警阈值 5%",
+            "total_inventory": 100,
+            "remained_inventory": 8,
+            "alert_threshold": 5.0
+        },
+    )
+    assert response.status_code == 201, f"创建景点失败: {response.json()}"
+    spot_d_id = response.json()["id"]
+    
+    response = client.get(f"/scenic-spots/{spot_d_id}/inventory-status")
+    data = response.json()
+    
+    print(f"  库存百分比: {data['inventory_percentage']}%")
+    print(f"  预警阈值: {data['alert_threshold']}%")
+    print(f"  是否低库存: {data['is_low_inventory']}")
+    
+    assert data["alert_threshold"] == 5.0, "预警阈值应该为 5%"
+    assert data["inventory_percentage"] == 8.0, "库存百分比应该为 8%"
+    assert data["is_low_inventory"] == False, "8% > 5% 不应该触发预警"
+    
+    print("  ✓ 场景 4 通过")
+    
+    print("\n  场景 5: 验证不同阈值景点在低库存列表中的表现")
+    print("  获取所有低库存景点...")
+    response = client.get("/scenic-spots/inventory/low-alert")
+    data = response.json()
+    
+    print(f"  低库存景点数量: {len(data)}")
+    
+    spot_a_in_list = any(spot["name"] == "高阈值景点 A" for spot in data)
+    spot_b_in_list = any(spot["name"] == "中阈值景点 B" for spot in data)
+    spot_c_in_list = any(spot["name"] == "超高阈值景点 C" for spot in data)
+    spot_d_in_list = any(spot["name"] == "低阈值景点 D" for spot in data)
+    
+    print(f"  高阈值景点 A (30%阈值, 25%库存) 是否在列表中: {spot_a_in_list}")
+    print(f"  中阈值景点 B (20%阈值, 25%库存) 是否在列表中: {spot_b_in_list}")
+    print(f"  超高阈值景点 C (50%阈值, 45%库存) 是否在列表中: {spot_c_in_list}")
+    print(f"  低阈值景点 D (5%阈值, 8%库存) 是否在列表中: {spot_d_in_list}")
+    
+    assert spot_a_in_list == True, "高阈值景点 A 应该在低库存列表中"
+    assert spot_b_in_list == False, "中阈值景点 B 不应该在低库存列表中"
+    assert spot_c_in_list == True, "超高阈值景点 C 应该在低库存列表中"
+    assert spot_d_in_list == False, "低阈值景点 D 不应该在低库存列表中"
+    
+    print("  ✓ 场景 5 通过")
+    
+    print("  ✓ 不同预警阈值测试通过")
+
+
+def test_default_alert_threshold():
+    print("\n测试 8: 测试默认预警阈值 (10%)...")
+    
+    print("  创建景点时不设置预警阈值 (应该使用默认值 10%)...")
+    response = client.post(
+        "/scenic-spots/",
+        json={
+            "name": "默认阈值景点",
+            "description": "使用默认预警阈值 10%",
+            "total_inventory": 100,
+            "remained_inventory": 8
+        },
+    )
+    assert response.status_code == 201, f"创建景点失败: {response.json()}"
+    data = response.json()
+    
+    print(f"  创建景点时返回的 alert_threshold: {data.get('alert_threshold')}")
+    
+    spot_id = data["id"]
+    
+    response = client.get(f"/scenic-spots/{spot_id}/inventory-status")
+    inventory_data = response.json()
+    
+    print(f"  库存百分比: {inventory_data['inventory_percentage']}%")
+    print(f"  预警阈值: {inventory_data['alert_threshold']}%")
+    print(f"  是否低库存: {inventory_data['is_low_inventory']}")
+    
+    assert inventory_data["alert_threshold"] == 10.0, "默认预警阈值应该为 10%"
+    assert inventory_data["inventory_percentage"] == 8.0, "库存百分比应该为 8%"
+    assert inventory_data["is_low_inventory"] == True, "8% < 10% 应该触发预警"
+    
+    print("  ✓ 默认预警阈值测试通过")
 
 
 def run_all_tests():
@@ -289,7 +428,8 @@ def run_all_tests():
         test_low_inventory_alert()
         test_get_all_low_inventory_spots()
         test_out_of_stock()
-        test_10_percent_threshold()
+        test_different_alert_thresholds()
+        test_default_alert_threshold()
         
         print("\n" + "=" * 60)
         print("所有测试通过！")
