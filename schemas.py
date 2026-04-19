@@ -17,6 +17,8 @@ class ScenicSpotBase(BaseModel):
     location: Optional[str] = Field(None, max_length=200, description="景点位置")
     rating: Optional[float] = Field(None, ge=0, le=5, description="评分")
     image_url: Optional[str] = Field(None, max_length=200, description="图片URL")
+    total_inventory: Optional[int] = Field(100, ge=0, description="总库存")
+    remained_inventory: Optional[int] = Field(100, ge=0, description="剩余库存")
 
 
 class ScenicSpotCreate(ScenicSpotBase):
@@ -29,12 +31,26 @@ class ScenicSpotUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=200)
     rating: Optional[float] = Field(None, ge=0, le=5)
     image_url: Optional[str] = Field(None, max_length=200)
+    total_inventory: Optional[int] = Field(None, ge=0)
+    remained_inventory: Optional[int] = Field(None, ge=0)
 
 
 class ScenicSpotResponse(ScenicSpotBase):
     id: int
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class ScenicSpotInventoryAlert(BaseModel):
+    id: int
+    name: str
+    total_inventory: int
+    remained_inventory: int
+    inventory_percentage: float
+    is_low_inventory: bool = False
 
     class Config:
         orm_mode = True
