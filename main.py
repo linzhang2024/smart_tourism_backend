@@ -78,6 +78,55 @@ def delete_scenic_spot(scenic_spot_id: int, db: Session = Depends(get_db)):
     return {"message": "景点已删除"}
 
 
+@app.get("/scenic-spots/{scenic_spot_id}/inventory-status", response_model=schemas.ScenicSpotInventoryAlert, tags=["库存管理"])
+def get_scenic_spot_inventory_status(scenic_spot_id: int, db: Session = Depends(get_db)):
+    db_scenic_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == scenic_spot_id).first()
+    if db_scenic_spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    inventory_percentage = 0.0
+    if db_scenic_spot.total_inventory > 0:
+        inventory_percentage = (db_scenic_spot.remained_inventory / db_scenic_spot.total_inventory) * 100
+    
+    is_low_inventory = inventory_percentage < 10.0
+    
+    alert_response = schemas.ScenicSpotInventoryAlert(
+        id=db_scenic_spot.id,
+        name=db_scenic_spot.name,
+        total_inventory=db_scenic_spot.total_inventory,
+        remained_inventory=db_scenic_spot.remained_inventory,
+        inventory_percentage=round(inventory_percentage, 2),
+        is_low_inventory=is_low_inventory
+    )
+    
+    return alert_response
+
+
+@app.get("/scenic-spots/inventory/low-alert", response_model=List[schemas.ScenicSpotInventoryAlert], tags=["库存管理"])
+def get_low_inventory_alert(db: Session = Depends(get_db)):
+    all_scenic_spots = db.query(models.ScenicSpot).all()
+    low_inventory_spots = []
+    
+    for spot in all_scenic_spots:
+        inventory_percentage = 0.0
+        if spot.total_inventory > 0:
+            inventory_percentage = (spot.remained_inventory / spot.total_inventory) * 100
+        
+        is_low_inventory = inventory_percentage < 10.0
+        
+        if is_low_inventory:
+            low_inventory_spots.append(schemas.ScenicSpotInventoryAlert(
+                id=spot.id,
+                name=spot.name,
+                total_inventory=spot.total_inventory,
+                remained_inventory=spot.remained_inventory,
+                inventory_percentage=round(inventory_percentage, 2),
+                is_low_inventory=True
+            ))
+    
+    return low_inventory_spots
+
+
 @app.get("/tourists/", response_model=List[schemas.TouristResponse], tags=["游客管理"])
 def read_tourists(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     tourists = db.query(models.Tourist).offset(skip).limit(limit).all()
@@ -159,13 +208,19 @@ def create_ticket(ticket: schemas.TicketCreate, db: Session = Depends(get_db)):
     if db_scenic_spot is None:
         raise HTTPException(status_code=404, detail="景点不存在")
     
+    if db_scenic_spot.remained_inventory <= 0:
+        raise HTTPException(status_code=400, detail="库存不足")
+    
     db_tourist = db.query(models.Tourist).filter(models.Tourist.id == ticket.tourist_id).first()
     if db_tourist is None:
         raise HTTPException(status_code=404, detail="游客不存在")
     
+    db_scenic_spot.remained_inventory -= 1
+    
     db_ticket = models.Ticket(**ticket.dict())
     db.add(db_ticket)
     db.commit()
+    db.refresh(db_scenic_spot)
     db.refresh(db_ticket)
     return db_ticket
 

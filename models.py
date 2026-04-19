@@ -13,6 +13,8 @@ class ScenicSpot(Base):
     location = Column(String(200))
     rating = Column(Float)
     image_url = Column(String(200))
+    total_inventory = Column(Integer, default=100)
+    remained_inventory = Column(Integer, default=100)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
