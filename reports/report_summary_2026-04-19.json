@@ -1,0 +1,42 @@
+{
+  "report_type": "inventory_alert",
+  "generated_at": "2026-04-19 22:34:42",
+  "generated_date": "2026-04-19",
+  "summary": {
+    "total_alert_spots": 3,
+    "avg_inventory_ratio": 0.0628,
+    "avg_inventory_ratio_percent": "6.28%"
+  },
+  "alert_spots": [
+    {
+      "id": 3,
+      "name": "颐和园",
+      "total_inventory": 150,
+      "remained_inventory": 5,
+      "inventory_ratio": 0.0333,
+      "inventory_ratio_percent": "3.33%",
+      "alert_level": "critical",
+      "progress_bar": "[----------]"
+    },
+    {
+      "id": 2,
+      "name": "八达岭长城",
+      "total_inventory": 200,
+      "remained_inventory": 15,
+      "inventory_ratio": 0.075,
+      "inventory_ratio_percent": "7.50%",
+      "alert_level": "low",
+      "progress_bar": "[=---------]"
+    },
+    {
+      "id": 1,
+      "name": "故宫博物院",
+      "total_inventory": 100,
+      "remained_inventory": 8,
+      "inventory_ratio": 0.08,
+      "inventory_ratio_percent": "8.00%",
+      "alert_level": "low",
+      "progress_bar": "[=---------]"
+    }
+  ]
+}
