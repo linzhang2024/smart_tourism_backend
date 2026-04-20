@@ -287,6 +287,49 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     return None
 
 
+# TouristFlow endpoints
+@app.post("/traffic/record", response_model=schemas.TouristFlow, status_code=status.HTTP_201_CREATED, tags=["流量监控"])
+def create_traffic_record(traffic: schemas.TouristFlowCreate, db: Session = Depends(get_db)):
+    scenic_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == traffic.scenic_spot_id).first()
+    if scenic_spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    db_traffic = models.TouristFlow(**traffic.model_dump())
+    db.add(db_traffic)
+    db.commit()
+    db.refresh(db_traffic)
+    return db_traffic
+
+
+@app.get("/traffic/analytics/{spot_id}", response_model=schemas.TouristFlowAnalytics, tags=["流量监控"])
+def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
+    scenic_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == spot_id).first()
+    if scenic_spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    recent_records = db.query(models.TouristFlow).filter(
+        models.TouristFlow.scenic_spot_id == spot_id
+    ).order_by(models.TouristFlow.record_time.desc()).limit(5).all()
+    
+    if not recent_records:
+        return schemas.TouristFlowAnalytics(
+            scenic_spot_id=spot_id,
+            scenic_spot_name=scenic_spot.name,
+            recent_records=[],
+            average_entry_count=0.0
+        )
+    
+    total = sum(record.entry_count for record in recent_records)
+    average = total / len(recent_records)
+    
+    return schemas.TouristFlowAnalytics(
+        scenic_spot_id=spot_id,
+        scenic_spot_name=scenic_spot.name,
+        recent_records=recent_records,
+        average_entry_count=round(average, 2)
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
     
