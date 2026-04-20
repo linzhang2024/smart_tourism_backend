@@ -94,6 +94,7 @@ class TouristWithTickets(Tourist):
 
 class ScenicSpotWithTickets(ScenicSpot):
     tickets: List[Ticket] = []
+    is_favorited: bool = Field(False, description="当前用户是否已收藏该景点")
 
 
 class TicketWithDetails(Ticket):
@@ -108,6 +109,33 @@ class ScenicSpotInventoryAlert(BaseModel):
     remained_inventory: int
     inventory_ratio: float
     is_low_inventory: bool
+
+    class Config:
+        from_attributes = True
+
+
+class FavoriteCreate(BaseModel):
+    tourist_id: int = Field(..., description="游客ID")
+    scenic_spot_id: int = Field(..., description="景点ID")
+
+
+class Favorite(BaseModel):
+    id: int
+    tourist_id: int
+    scenic_spot_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FavoriteToggleResponse(BaseModel):
+    is_favorited: bool = Field(..., description="当前是否已收藏")
+    message: str = Field(..., description="操作结果消息")
+
+
+class ScenicSpotWithFavoriteStatus(ScenicSpot):
+    is_favorited: bool = Field(False, description="当前用户是否已收藏该景点")
 
     class Config:
         from_attributes = True

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -14,6 +14,7 @@ class Tourist(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tickets = relationship("Ticket", back_populates="tourist")
+    favorites = relationship("Favorite", back_populates="tourist")
 
 
 class ScenicSpot(Base):
@@ -30,6 +31,7 @@ class ScenicSpot(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tickets = relationship("Ticket", back_populates="scenic_spot")
+    favorites = relationship("Favorite", back_populates="scenic_spot")
 
 
 class Ticket(Base):
@@ -45,3 +47,19 @@ class Ticket(Base):
     
     tourist = relationship("Tourist", back_populates="tickets")
     scenic_spot = relationship("ScenicSpot", back_populates="tickets")
+
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tourist_id = Column(Integer, ForeignKey("tourists.id"), nullable=False)
+    scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('tourist_id', 'scenic_spot_id', name='unique_tourist_spot_favorite'),
+    )
+
+    tourist = relationship("Tourist", back_populates="favorites")
+    scenic_spot = relationship("ScenicSpot", back_populates="favorites")
