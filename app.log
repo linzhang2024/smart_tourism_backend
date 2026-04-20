@@ -93,3 +93,96 @@
 2026-04-20 16:19:27,039 - main - ERROR - 订单创建失败 - 订单号: fc11fd81-6a62-4044-8727-604576bb693c, 原因: 库存不足
 2026-04-20 16:19:27,065 - main - ERROR - 库存不足 - 景点: 测试景点, 需求: 1, 可用: 0
 2026-04-20 16:19:27,099 - main - ERROR - 订单创建失败 - 订单号: 9991c5f7-2753-4bc4-b9f5-99f912dc8aa4, 原因: 库存不足
+{"timestamp": "2026-04-20T08:51:48.983859Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.983859Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.983859Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.983859Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.983859Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.984864Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.985367Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.985367Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.986873Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.986873Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:51:48.986873Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.989877Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.990878Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.990878Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.992383Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.992383Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.993388Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.993388Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.993388Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.993388Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.993388Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.993388Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.994388Z", "level": "INFO", "message": "获取行锁成功，当前库存: 3", "scenic_spot_id": 9, "action": "LOCK_ACQUIRED", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:51:48.994388Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.994388Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.996077Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.996604Z", "level": "INFO", "message": "订单创建成功，订单号: 57c624e1-ca6e-4a97-9bde-b5d895769e3e", "order_id": "57c624e1-ca6e-4a97-9bde-b5d895769e3e", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:48.996604Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.998611Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.998611Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:48.999610Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:51:49.027970Z", "level": "INFO", "message": "支付成功，订单号: 57c624e1-ca6e-4a97-9bde-b5d895769e3e, 支付时间: 2026-04-20 08:51:48.994388", "order_id": "57c624e1-ca6e-4a97-9bde-b5d895769e3e", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.036018Z", "level": "INFO", "message": "订单创建成功，订单号: 15ea9145-44aa-4bc8-a8fc-bbee9467ca1e", "order_id": "15ea9145-44aa-4bc8-a8fc-bbee9467ca1e", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.059643Z", "level": "INFO", "message": "支付成功，订单号: 15ea9145-44aa-4bc8-a8fc-bbee9467ca1e, 支付时间: 2026-04-20 08:51:48.999610", "order_id": "15ea9145-44aa-4bc8-a8fc-bbee9467ca1e", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.067652Z", "level": "INFO", "message": "订单创建成功，订单号: 6dad51c4-e2db-470d-bedf-bb9356ee9c14", "order_id": "6dad51c4-e2db-470d-bedf-bb9356ee9c14", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.091765Z", "level": "INFO", "message": "支付成功，订单号: 6dad51c4-e2db-470d-bedf-bb9356ee9c14, 支付时间: 2026-04-20 08:51:49.003118", "order_id": "6dad51c4-e2db-470d-bedf-bb9356ee9c14", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.099280Z", "level": "INFO", "message": "订单创建成功，订单号: 4bc83086-42ef-4a50-a8bc-57c13b11b20c", "order_id": "4bc83086-42ef-4a50-a8bc-57c13b11b20c", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.126451Z", "level": "INFO", "message": "支付成功，订单号: 4bc83086-42ef-4a50-a8bc-57c13b11b20c, 支付时间: 2026-04-20 08:51:48.998611", "order_id": "4bc83086-42ef-4a50-a8bc-57c13b11b20c", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.130953Z", "level": "INFO", "message": "订单创建成功，订单号: 038b2aed-d7f3-48fc-a0da-48abca96c597", "order_id": "038b2aed-d7f3-48fc-a0da-48abca96c597", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.156825Z", "level": "INFO", "message": "支付成功，订单号: 038b2aed-d7f3-48fc-a0da-48abca96c597, 支付时间: 2026-04-20 08:51:48.997610", "order_id": "038b2aed-d7f3-48fc-a0da-48abca96c597", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.162334Z", "level": "INFO", "message": "订单创建成功，订单号: 7d213634-d6ed-4fe7-b9b5-13ea58a5da2e", "order_id": "7d213634-d6ed-4fe7-b9b5-13ea58a5da2e", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.194448Z", "level": "INFO", "message": "支付成功，订单号: 7d213634-d6ed-4fe7-b9b5-13ea58a5da2e, 支付时间: 2026-04-20 08:51:49.003118", "order_id": "7d213634-d6ed-4fe7-b9b5-13ea58a5da2e", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.207975Z", "level": "INFO", "message": "订单创建成功，订单号: ad50f6fb-a086-4113-abdc-68d44d60c155", "order_id": "ad50f6fb-a086-4113-abdc-68d44d60c155", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.234312Z", "level": "INFO", "message": "支付成功，订单号: ad50f6fb-a086-4113-abdc-68d44d60c155, 支付时间: 2026-04-20 08:51:49.001611", "order_id": "ad50f6fb-a086-4113-abdc-68d44d60c155", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.237316Z", "level": "INFO", "message": "订单创建成功，订单号: 700c8e6e-9c99-4140-a864-f0b19556d726", "order_id": "700c8e6e-9c99-4140-a864-f0b19556d726", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.264985Z", "level": "INFO", "message": "支付成功，订单号: 700c8e6e-9c99-4140-a864-f0b19556d726, 支付时间: 2026-04-20 08:51:48.999610", "order_id": "700c8e6e-9c99-4140-a864-f0b19556d726", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.270511Z", "level": "INFO", "message": "订单创建成功，订单号: e2c67008-4f53-4d0c-913f-408f1e61855e", "order_id": "e2c67008-4f53-4d0c-913f-408f1e61855e", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.293864Z", "level": "INFO", "message": "支付成功，订单号: e2c67008-4f53-4d0c-913f-408f1e61855e, 支付时间: 2026-04-20 08:51:49.001611", "order_id": "e2c67008-4f53-4d0c-913f-408f1e61855e", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:51:49.317602Z", "level": "INFO", "message": "订单创建成功，订单号: ee7a1513-b75f-4ead-a91f-cc2e80d5b49f", "order_id": "ee7a1513-b75f-4ead-a91f-cc2e80d5b49f", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:51:49.340868Z", "level": "INFO", "message": "支付成功，订单号: ee7a1513-b75f-4ead-a91f-cc2e80d5b49f, 支付时间: 2026-04-20 08:51:49.002613", "order_id": "ee7a1513-b75f-4ead-a91f-cc2e80d5b49f", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:56:51.366817Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.368005Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.368005Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.368005Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.369009Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.369009Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.370010Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.371010Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.371010Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.371010Z", "level": "INFO", "message": "开始处理购票请求", "scenic_spot_id": 9, "action": "PURCHASE_REQUEST", "tourist_id": 1, "quantity": 1}
+{"timestamp": "2026-04-20T08:56:51.373010Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.374515Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.376024Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.377531Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.378535Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.378535Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.379534Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.379534Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.380536Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.380536Z", "level": "INFO", "message": "当前库存: 3", "scenic_spot_id": 9, "action": "INVENTORY_CHECK", "remaining_inventory": 3}
+{"timestamp": "2026-04-20T08:56:51.381536Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 2", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 2}
+{"timestamp": "2026-04-20T08:56:51.384534Z", "level": "INFO", "message": "订单创建成功，订单号: a0bed5d2-f987-4546-8541-82b6e1aa31bc", "order_id": "a0bed5d2-f987-4546-8541-82b6e1aa31bc", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:56:51.410701Z", "level": "INFO", "message": "支付成功，订单号: a0bed5d2-f987-4546-8541-82b6e1aa31bc, 支付时间: 2026-04-20 08:56:51.382536", "order_id": "a0bed5d2-f987-4546-8541-82b6e1aa31bc", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:56:51.414695Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 1", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 1}
+{"timestamp": "2026-04-20T08:56:51.415698Z", "level": "INFO", "message": "订单创建成功，订单号: dfb1cde6-fd55-43af-b62f-1065035f3b11", "order_id": "dfb1cde6-fd55-43af-b62f-1065035f3b11", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:56:51.439088Z", "level": "INFO", "message": "支付成功，订单号: dfb1cde6-fd55-43af-b62f-1065035f3b11, 支付时间: 2026-04-20 08:56:51.414695", "order_id": "dfb1cde6-fd55-43af-b62f-1065035f3b11", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:56:51.445752Z", "level": "INFO", "message": "库存扣减成功，扣减数量: 1, 剩余: 0", "scenic_spot_id": 9, "action": "INVENTORY_DEDUCTED", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.446751Z", "level": "INFO", "message": "订单创建成功，订单号: c7dd07ca-91c0-4638-91b1-43beede1ed60", "order_id": "c7dd07ca-91c0-4638-91b1-43beede1ed60", "scenic_spot_id": 9, "action": "ORDER_CREATED"}
+{"timestamp": "2026-04-20T08:56:51.471066Z", "level": "INFO", "message": "支付成功，订单号: c7dd07ca-91c0-4638-91b1-43beede1ed60, 支付时间: 2026-04-20 08:56:51.445752", "order_id": "c7dd07ca-91c0-4638-91b1-43beede1ed60", "scenic_spot_id": 9, "action": "PAYMENT_SUCCESS"}
+{"timestamp": "2026-04-20T08:56:51.475581Z", "level": "ERROR", "message": "库存不足，需求: 1, 可用: 0", "scenic_spot_id": 9, "action": "INVENTORY_SHORTAGE", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.514486Z", "level": "ERROR", "message": "库存不足订单记录已保存", "order_id": "8cf7b9a2-3e0e-49b9-aac2-c1ac58adc505", "scenic_spot_id": 9, "action": "FAILED_ORDER_SAVED"}
+{"timestamp": "2026-04-20T08:56:51.521035Z", "level": "ERROR", "message": "库存不足，需求: 1, 可用: 0", "scenic_spot_id": 9, "action": "INVENTORY_SHORTAGE", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.562271Z", "level": "ERROR", "message": "库存不足订单记录已保存", "order_id": "fba87bdc-ac1e-4c9a-bb2d-08cbb944fe39", "scenic_spot_id": 9, "action": "FAILED_ORDER_SAVED"}
+{"timestamp": "2026-04-20T08:56:51.566778Z", "level": "ERROR", "message": "库存不足，需求: 1, 可用: 0", "scenic_spot_id": 9, "action": "INVENTORY_SHORTAGE", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.597359Z", "level": "ERROR", "message": "库存不足，需求: 1, 可用: 0", "scenic_spot_id": 9, "action": "INVENTORY_SHORTAGE", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.597359Z", "level": "ERROR", "message": "库存不足订单记录已保存", "order_id": "ce37de3c-f23e-4ee6-b97a-56563a7a1848", "scenic_spot_id": 9, "action": "FAILED_ORDER_SAVED"}
+{"timestamp": "2026-04-20T08:56:51.625822Z", "level": "ERROR", "message": "库存不足订单记录已保存", "order_id": "6c06b309-1950-4d8f-b564-6d462545157b", "scenic_spot_id": 9, "action": "FAILED_ORDER_SAVED"}
+{"timestamp": "2026-04-20T08:56:51.628329Z", "level": "ERROR", "message": "库存不足，需求: 1, 可用: 0", "scenic_spot_id": 9, "action": "INVENTORY_SHORTAGE", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.654846Z", "level": "ERROR", "message": "库存不足订单记录已保存", "order_id": "58710054-2624-43d1-b36b-68549376e94e", "scenic_spot_id": 9, "action": "FAILED_ORDER_SAVED"}
+{"timestamp": "2026-04-20T08:56:51.659355Z", "level": "ERROR", "message": "库存不足，需求: 1, 可用: 0", "scenic_spot_id": 9, "action": "INVENTORY_SHORTAGE", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.689895Z", "level": "ERROR", "message": "库存不足订单记录已保存", "order_id": "6f7abf36-8cc6-4f87-be8e-450056550b84", "scenic_spot_id": 9, "action": "FAILED_ORDER_SAVED"}
+{"timestamp": "2026-04-20T08:56:51.691896Z", "level": "ERROR", "message": "库存不足，需求: 1, 可用: 0", "scenic_spot_id": 9, "action": "INVENTORY_SHORTAGE", "quantity": 1, "remaining_inventory": 0}
+{"timestamp": "2026-04-20T08:56:51.721585Z", "level": "ERROR", "message": "库存不足订单记录已保存", "order_id": "723b48f3-2f13-4c59-be01-68719b348619", "scenic_spot_id": 9, "action": "FAILED_ORDER_SAVED"}
