@@ -1,3 +1,4 @@
+import logging
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -6,10 +7,22 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List
 import os
+from datetime import datetime
 
 import models
 import schemas
 from database import engine, get_db
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('app.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 def migrate_database():
@@ -363,6 +376,129 @@ def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
         congestion_level=congestion_level,
         trend=trend
     )
+
+
+@app.post("/tickets/purchase", response_model=schemas.TicketOrder, status_code=status.HTTP_201_CREATED, tags=["门票支付"])
+def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends(get_db)):
+    logger.info(f"开始处理购票请求 - 游客ID: {order_data.tourist_id}, 景点ID: {order_data.scenic_spot_id}, 数量: {order_data.quantity}")
+    
+    tourist = db.query(models.Tourist).filter(models.Tourist.id == order_data.tourist_id).first()
+    if tourist is None:
+        logger.warning(f"购票请求失败 - 游客不存在: {order_data.tourist_id}")
+        raise HTTPException(status_code=404, detail="游客不存在")
+    
+    scenic_spot = db.query(models.ScenicSpot).filter(
+        models.ScenicSpot.id == order_data.scenic_spot_id
+    ).first()
+    
+    if scenic_spot is None:
+        logger.warning(f"购票请求失败 - 景点不存在: {order_data.scenic_spot_id}")
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    try:
+        logger.info(f"开始数据库事务 - 景点 {scenic_spot.name} 当前库存: {scenic_spot.remained_inventory}")
+        
+        from sqlalchemy import update
+        
+        update_stmt = update(models.ScenicSpot).where(
+            models.ScenicSpot.id == order_data.scenic_spot_id,
+            models.ScenicSpot.remained_inventory >= order_data.quantity
+        ).values(
+            remained_inventory=models.ScenicSpot.remained_inventory - order_data.quantity
+        ).execution_options(synchronize_session="fetch")
+        
+        result = db.execute(update_stmt)
+        affected_rows = result.rowcount
+        
+        if affected_rows == 0:
+            db.refresh(scenic_spot)
+            logger.error(f"库存不足 - 景点: {scenic_spot.name}, 需求: {order_data.quantity}, 可用: {scenic_spot.remained_inventory}")
+            
+            failed_order = models.TicketOrder(
+                tourist_id=order_data.tourist_id,
+                scenic_spot_id=order_data.scenic_spot_id,
+                quantity=order_data.quantity,
+                total_price=scenic_spot.price * order_data.quantity,
+                status=models.OrderStatus.FAILED,
+                created_at=datetime.utcnow()
+            )
+            db.add(failed_order)
+            db.commit()
+            db.refresh(failed_order)
+            
+            logger.error(f"订单创建失败 - 订单号: {failed_order.order_no}, 原因: 库存不足")
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"库存不足，当前剩余库存: {scenic_spot.remained_inventory}"
+            )
+        
+        db.refresh(scenic_spot)
+        logger.info(f"扣减库存 - 景点: {scenic_spot.name}, 扣减数量: {order_data.quantity}, 剩余: {scenic_spot.remained_inventory}")
+        
+        total_price = scenic_spot.price * order_data.quantity
+        
+        order = models.TicketOrder(
+            tourist_id=order_data.tourist_id,
+            scenic_spot_id=order_data.scenic_spot_id,
+            quantity=order_data.quantity,
+            total_price=total_price,
+            status=models.OrderStatus.PAID,
+            created_at=datetime.utcnow(),
+            paid_at=datetime.utcnow()
+        )
+        db.add(order)
+        
+        db.commit()
+        db.refresh(order)
+        
+        logger.info(f"订单创建成功 - 订单号: {order.order_no}, 游客: {tourist.name}, 景点: {scenic_spot.name}, 数量: {order_data.quantity}, 总价: {total_price}")
+        logger.info(f"支付成功 - 订单号: {order.order_no}, 支付时间: {order.paid_at}")
+        
+        return order
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"购票过程中发生错误: {str(e)}")
+        db.rollback()
+        
+        scenic_spot = db.query(models.ScenicSpot).filter(
+            models.ScenicSpot.id == order_data.scenic_spot_id
+        ).first()
+        
+        failed_order = models.TicketOrder(
+            tourist_id=order_data.tourist_id,
+            scenic_spot_id=order_data.scenic_spot_id,
+            quantity=order_data.quantity,
+            total_price=scenic_spot.price * order_data.quantity if scenic_spot else 0,
+            status=models.OrderStatus.FAILED,
+            created_at=datetime.utcnow()
+        )
+        db.add(failed_order)
+        db.commit()
+        db.refresh(failed_order)
+        
+        logger.error(f"订单创建失败 - 订单号: {failed_order.order_no}, 错误: {str(e)}")
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"购票失败: {str(e)}"
+        )
+
+
+@app.get("/tickets/orders/", response_model=list[schemas.TicketOrder], tags=["门票支付"])
+def get_ticket_orders(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    orders = db.query(models.TicketOrder).offset(skip).limit(limit).all()
+    return orders
+
+
+@app.get("/tickets/orders/{order_id}", response_model=schemas.TicketOrderWithDetails, tags=["门票支付"])
+def get_ticket_order(order_id: int, db: Session = Depends(get_db)):
+    order = db.query(models.TicketOrder).filter(models.TicketOrder.id == order_id).first()
+    if order is None:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    return order
 
 
 if __name__ == "__main__":

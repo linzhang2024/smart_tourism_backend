@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
+import uuid
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 
 
 def get_utc8_now():
@@ -9,6 +11,29 @@ def get_utc8_now():
     utc8_offset = timedelta(hours=8)
     utc8_time = utc_now.astimezone(timezone(utc8_offset))
     return utc8_time.replace(tzinfo=None)
+
+
+class OrderStatus(str, Enum):
+    PENDING = "PENDING"
+    PAID = "PAID"
+    FAILED = "FAILED"
+
+
+class TicketOrder(Base):
+    __tablename__ = "ticket_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_no = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
+    tourist_id = Column(Integer, ForeignKey("tourists.id"), nullable=False)
+    scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=False)
+    quantity = Column(Integer, default=1)
+    total_price = Column(Float, nullable=False)
+    status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    paid_at = Column(DateTime, nullable=True)
+
+    tourist = relationship("Tourist")
+    scenic_spot = relationship("ScenicSpot")
 
 
 class Tourist(Base):
