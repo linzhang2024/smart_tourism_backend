@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧旅游实时流量监控看板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #ffffff;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 30px 0;
+            margin-bottom: 40px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(0, 210, 255, 0.3);
+            letter-spacing: 4px;
+        }
+
+        .header .subtitle {
+            margin-top: 10px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+        }
+
+        .control-panel {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group label {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .input-group input {
+            padding: 12px 20px;
+            font-size: 1rem;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            width: 200px;
+            transition: all 0.3s ease;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: #00d2ff;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+        }
+
+        .input-group input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .btn {
+            padding: 12px 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 210, 255, 0.6);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .dashboard {
+            display: none;
+        }
+
+        .dashboard.active {
+            display: block;
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(0, 210, 255, 0.3);
+        }
+
+        .card-title {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.6);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+
+        .card-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .card-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .spot-info .card-value {
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .average-count .card-value {
+            color: #ffd700;
+        }
+
+        .congestion-level {
+            text-align: center;
+        }
+
+        .congestion-level .card-value {
+            font-size: 2.5rem;
+        }
+
+        .congestion-level.comfort {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.1));
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .congestion-level.comfort .card-value {
+            color: #22c55e;
+        }
+
+        .congestion-level.normal {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.1));
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .congestion-level.normal .card-value {
+            color: #f59e0b;
+        }
+
+        .congestion-level.crowded {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(239, 68, 68, 0.1));
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .congestion-level.crowded .card-value {
+            color: #ef4444;
+        }
+
+        .trend-card {
+            text-align: center;
+        }
+
+        .trend-card .card-value {
+            font-size: 3rem;
+        }
+
+        .trend-up {
+            color: #ef4444;
+        }
+
+        .trend-down {
+            color: #22c55e;
+        }
+
+        .trend-stable {
+            color: #6b7280;
+        }
+
+        .records-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, #00d2ff, #3a7bd5);
+            border-radius: 2px;
+        }
+
+        .records-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .records-table th,
+        .records-table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .records-table th {
+            background: rgba(0, 210, 255, 0.1);
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+
+        .records-table tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .records-table td {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .empty-state .icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+
+        .empty-state p {
+            font-size: 1.2rem;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00d2ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .loading p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.1rem;
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast .toast-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .toast .toast-message {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8rem;
+                letter-spacing: 2px;
+            }
+
+            .control-panel {
+                flex-direction: column;
+            }
+
+            .input-group {
+                flex-direction: column;
+                width: 100%;
+            }
+
+            .input-group input {
+                width: 100%;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                padding: 20px;
+            }
+
+            .card-value {
+                font-size: 1.8rem;
+            }
+
+            .records-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>智慧旅游实时流量监控看板</h1>
+            <p class="subtitle">实时监控景区人流量，智能分析拥堵状况</p>
+        </div>
+
+        <div class="control-panel">
+            <div class="input-group">
+                <label for="spotId">景点 ID:</label>
+                <input type="number" id="spotId" placeholder="请输入景点 ID" min="1">
+            </div>
+            <button class="btn btn-primary" id="fetchBtn">获取实时分析</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在加载数据...</p>
+        </div>
+
+        <div class="empty-state" id="emptyState">
+            <div class="icon">📊</div>
+            <p>请输入景点 ID 并点击"获取实时分析"查看数据</p>
+        </div>
+
+        <div class="dashboard" id="dashboard">
+            <div class="cards-grid">
+                <div class="card spot-info">
+                    <div class="card-icon">🏞️</div>
+                    <div class="card-title">景点名称</div>
+                    <div class="card-value" id="spotName">-</div>
+                </div>
+
+                <div class="card average-count">
+                    <div class="card-icon">👥</div>
+                    <div class="card-title">当前平均人数</div>
+                    <div class="card-value" id="averageCount">0</div>
+                </div>
+
+                <div class="card congestion-level" id="congestionCard">
+                    <div class="card-icon">🚦</div>
+                    <div class="card-title">拥堵等级</div>
+                    <div class="card-value" id="congestionLevel">-</div>
+                </div>
+
+                <div class="card trend-card" id="trendCard">
+                    <div class="card-icon">📈</div>
+                    <div class="card-title">流量趋势</div>
+                    <div class="card-value" id="trendValue">→</div>
+                    <div class="trend-label" id="trendLabel">-</div>
+                </div>
+            </div>
+
+            <div class="records-section">
+                <h3 class="section-title">最近流量记录</h3>
+                <table class="records-table" id="recordsTable">
+                    <thead>
+                        <tr>
+                            <th>序号</th>
+                            <th>记录时间</th>
+                            <th>入园人数</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recordsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+        <div class="toast-title">错误</div>
+        <div class="toast-message" id="toastMessage">-</div>
+    </div>
+
+    <script>
+        const spotIdInput = document.getElementById('spotId');
+        const fetchBtn = document.getElementById('fetchBtn');
+        const loading = document.getElementById('loading');
+        const emptyState = document.getElementById('emptyState');
+        const dashboard = document.getElementById('dashboard');
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toastMessage');
+
+        function showToast(message) {
+            toastMessage.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function updateCongestionCard(level) {
+            const card = document.getElementById('congestionCard');
+            const levelElement = document.getElementById('congestionLevel');
+            
+            card.classList.remove('comfort', 'normal', 'crowded');
+            levelElement.textContent = level;
+
+            if (level === '舒适') {
+                card.classList.add('comfort');
+            } else if (level === '正常') {
+                card.classList.add('normal');
+            } else if (level === '拥挤') {
+                card.classList.add('crowded');
+            }
+        }
+
+        function updateTrendCard(trend) {
+            const trendValue = document.getElementById('trendValue');
+            const trendLabel = document.getElementById('trendLabel');
+            
+            trendLabel.textContent = trend;
+
+            if (trend === '上升') {
+                trendValue.textContent = '↑';
+                trendValue.className = 'card-value trend-up';
+            } else if (trend === '下降') {
+                trendValue.textContent = '↓';
+                trendValue.className = 'card-value trend-down';
+            } else {
+                trendValue.textContent = '→';
+                trendValue.className = 'card-value trend-stable';
+            }
+        }
+
+        function updateRecordsTable(records) {
+            const tbody = document.getElementById('recordsBody');
+            tbody.innerHTML = '';
+
+            if (records.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td colspan="3" style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 30px;">
+                        暂无流量记录
+                    </td>
+                `;
+                tbody.appendChild(tr);
+                return;
+            }
+
+            records.forEach((record, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${record.record_time}</td>
+                    <td>${record.entry_count}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function fetchAnalytics() {
+            const spotId = spotIdInput.value.trim();
+            
+            if (!spotId) {
+                showToast('请输入景点 ID');
+                return;
+            }
+
+            if (spotId < 1) {
+                showToast('景点 ID 必须大于 0');
+                return;
+            }
+
+            loading.classList.add('active');
+            emptyState.style.display = 'none';
+            dashboard.classList.remove('active');
+
+            try {
+                const response = await fetch(`/traffic/analytics/${spotId}`);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    if (response.status === 404) {
+                        showToast('未找到该景点数据');
+                    } else {
+                        showToast(errorData.detail || '获取数据失败');
+                    }
+                    return;
+                }
+
+                const data = await response.json();
+
+                document.getElementById('spotName').textContent = data.scenic_spot_name;
+                document.getElementById('averageCount').textContent = data.average_entry_count;
+                
+                updateCongestionCard(data.congestion_level);
+                updateTrendCard(data.trend);
+                updateRecordsTable(data.recent_records);
+
+                dashboard.classList.add('active');
+            } catch (error) {
+                console.error('Error fetching analytics:', error);
+                showToast('网络错误，请稍后重试');
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        fetchBtn.addEventListener('click', fetchAnalytics);
+
+        spotIdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                fetchAnalytics();
+            }
+        });
+    </script>
+</body>
+</html>

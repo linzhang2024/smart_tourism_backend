@@ -1,8 +1,11 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List
+import os
 
 import models
 import schemas
@@ -47,9 +50,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+if os.path.exists(STATIC_DIR):
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 
 @app.get("/", tags=["根路径"])
 def root():
+    index_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
     return {
         "message": "智慧旅游后端API服务",
         "version": "1.0.0",
@@ -285,6 +297,72 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     db.delete(db_ticket)
     db.commit()
     return None
+
+
+# TouristFlow endpoints
+@app.post("/traffic/record", response_model=schemas.TouristFlow, status_code=status.HTTP_201_CREATED, tags=["流量监控"])
+def create_traffic_record(traffic: schemas.TouristFlowCreate, db: Session = Depends(get_db)):
+    scenic_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == traffic.scenic_spot_id).first()
+    if scenic_spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    db_traffic = models.TouristFlow(**traffic.model_dump())
+    db.add(db_traffic)
+    db.commit()
+    db.refresh(db_traffic)
+    return db_traffic
+
+
+@app.get("/traffic/analytics/{spot_id}", response_model=schemas.TouristFlowAnalytics, tags=["流量监控"])
+def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
+    scenic_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == spot_id).first()
+    if scenic_spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    recent_records = db.query(models.TouristFlow).filter(
+        models.TouristFlow.scenic_spot_id == spot_id
+    ).order_by(models.TouristFlow.record_time.desc()).limit(5).all()
+    
+    if not recent_records:
+        return schemas.TouristFlowAnalytics(
+            scenic_spot_id=spot_id,
+            scenic_spot_name=scenic_spot.name,
+            recent_records=[],
+            average_entry_count=0.0,
+            congestion_level="舒适",
+            trend="持平"
+        )
+    
+    total = sum(record.entry_count for record in recent_records)
+    average = total / len(recent_records)
+    
+    if average < 100:
+        congestion_level = "舒适"
+    elif 100 <= average <= 200:
+        congestion_level = "正常"
+    else:
+        congestion_level = "拥挤"
+    
+    if len(recent_records) >= 2:
+        last_record = recent_records[0]
+        second_last_record = recent_records[1]
+        if last_record.entry_count > second_last_record.entry_count:
+            trend = "上升"
+        elif last_record.entry_count < second_last_record.entry_count:
+            trend = "下降"
+        else:
+            trend = "持平"
+    else:
+        trend = "持平"
+    
+    return schemas.TouristFlowAnalytics(
+        scenic_spot_id=spot_id,
+        scenic_spot_name=scenic_spot.name,
+        recent_records=recent_records,
+        average_entry_count=round(average, 2),
+        congestion_level=congestion_level,
+        trend=trend
+    )
 
 
 if __name__ == "__main__":
