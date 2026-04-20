@@ -1,11 +1,15 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+<<<<<<< HEAD
 from typing import List
 import os
+=======
+from typing import List, Optional
+>>>>>>> 1af8817c50a449493a6eb3c2c0cf3a956df1a536
 
 import models
 import schemas
@@ -188,11 +192,41 @@ def get_scenic_spots(skip: int = 0, limit: int = 100, db: Session = Depends(get_
 
 
 @app.get("/scenic-spots/{spot_id}", response_model=schemas.ScenicSpotWithTickets, tags=["景点管理"])
-def get_scenic_spot(spot_id: int, db: Session = Depends(get_db)):
+def get_scenic_spot(
+    spot_id: int,
+    tourist_id: Optional[int] = Query(None, description="游客ID（可选，用于判断是否已收藏）"),
+    db: Session = Depends(get_db)
+):
     spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == spot_id).first()
     if spot is None:
         raise HTTPException(status_code=404, detail="景点不存在")
-    return spot
+    
+    is_favorited = False
+    if tourist_id is not None:
+        tourist = db.query(models.Tourist).filter(models.Tourist.id == tourist_id).first()
+        if tourist is None:
+            raise HTTPException(status_code=404, detail="游客不存在")
+        
+        favorite = db.query(models.Favorite).filter(
+            models.Favorite.tourist_id == tourist_id,
+            models.Favorite.scenic_spot_id == spot_id
+        ).first()
+        is_favorited = favorite is not None
+    
+    result = schemas.ScenicSpotWithTickets(
+        id=spot.id,
+        name=spot.name,
+        description=spot.description,
+        location=spot.location,
+        rating=spot.rating,
+        price=spot.price,
+        total_inventory=spot.total_inventory,
+        remained_inventory=spot.remained_inventory,
+        created_at=spot.created_at,
+        tickets=spot.tickets,
+        is_favorited=is_favorited
+    )
+    return result
 
 
 @app.put("/scenic-spots/{spot_id}", response_model=schemas.ScenicSpot, tags=["景点管理"])
@@ -299,6 +333,7 @@ def delete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     return None
 
 
+<<<<<<< HEAD
 # TouristFlow endpoints
 @app.post("/traffic/record", response_model=schemas.TouristFlow, status_code=status.HTTP_201_CREATED, tags=["流量监控"])
 def create_traffic_record(traffic: schemas.TouristFlowCreate, db: Session = Depends(get_db)):
@@ -363,6 +398,53 @@ def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
         congestion_level=congestion_level,
         trend=trend
     )
+=======
+# Favorite endpoints
+@app.post("/favorites/toggle", response_model=schemas.FavoriteToggleResponse, tags=["收藏管理"])
+def toggle_favorite(favorite_data: schemas.FavoriteCreate, db: Session = Depends(get_db)):
+    tourist = db.query(models.Tourist).filter(models.Tourist.id == favorite_data.tourist_id).first()
+    if tourist is None:
+        raise HTTPException(status_code=404, detail="游客不存在")
+    
+    scenic_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == favorite_data.scenic_spot_id).first()
+    if scenic_spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+    
+    existing_favorite = db.query(models.Favorite).filter(
+        models.Favorite.tourist_id == favorite_data.tourist_id,
+        models.Favorite.scenic_spot_id == favorite_data.scenic_spot_id
+    ).first()
+    
+    if existing_favorite:
+        db.delete(existing_favorite)
+        db.commit()
+        return schemas.FavoriteToggleResponse(
+            is_favorited=False,
+            message="已取消收藏"
+        )
+    else:
+        new_favorite = models.Favorite(
+            tourist_id=favorite_data.tourist_id,
+            scenic_spot_id=favorite_data.scenic_spot_id
+        )
+        db.add(new_favorite)
+        db.commit()
+        return schemas.FavoriteToggleResponse(
+            is_favorited=True,
+            message="已收藏"
+        )
+
+
+@app.get("/favorites/tourists/{tourist_id}", response_model=List[schemas.ScenicSpot], tags=["收藏管理"])
+def get_favorites_by_tourist(tourist_id: int, db: Session = Depends(get_db)):
+    tourist = db.query(models.Tourist).filter(models.Tourist.id == tourist_id).first()
+    if tourist is None:
+        raise HTTPException(status_code=404, detail="游客不存在")
+    
+    favorites = db.query(models.Favorite).filter(models.Favorite.tourist_id == tourist_id).all()
+    scenic_spots = [fav.scenic_spot for fav in favorites]
+    return scenic_spots
+>>>>>>> 1af8817c50a449493a6eb3c2c0cf3a956df1a536
 
 
 if __name__ == "__main__":

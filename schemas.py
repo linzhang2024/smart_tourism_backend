@@ -94,6 +94,7 @@ class TouristWithTickets(Tourist):
 
 class ScenicSpotWithTickets(ScenicSpot):
     tickets: List[Ticket] = []
+    is_favorited: bool = Field(False, description="当前用户是否已收藏该景点")
 
 
 class TicketWithDetails(Ticket):
@@ -113,6 +114,7 @@ class ScenicSpotInventoryAlert(BaseModel):
         from_attributes = True
 
 
+<<<<<<< HEAD
 # TouristFlow schemas
 class TouristFlowBase(BaseModel):
     scenic_spot_id: int = Field(..., description="景点ID")
@@ -138,6 +140,30 @@ class TouristFlowAnalytics(BaseModel):
     average_entry_count: float
     congestion_level: str
     trend: str
+=======
+class FavoriteCreate(BaseModel):
+    tourist_id: int = Field(..., description="游客ID")
+    scenic_spot_id: int = Field(..., description="景点ID")
+
+
+class Favorite(BaseModel):
+    id: int
+    tourist_id: int
+    scenic_spot_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FavoriteToggleResponse(BaseModel):
+    is_favorited: bool = Field(..., description="当前是否已收藏")
+    message: str = Field(..., description="操作结果消息")
+
+
+class ScenicSpotWithFavoriteStatus(ScenicSpot):
+    is_favorited: bool = Field(False, description="当前用户是否已收藏该景点")
+>>>>>>> 1af8817c50a449493a6eb3c2c0cf3a956df1a536
 
     class Config:
         from_attributes = True
