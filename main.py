@@ -316,17 +316,40 @@ def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
             scenic_spot_id=spot_id,
             scenic_spot_name=scenic_spot.name,
             recent_records=[],
-            average_entry_count=0.0
+            average_entry_count=0.0,
+            congestion_level="舒适",
+            trend="持平"
         )
     
     total = sum(record.entry_count for record in recent_records)
     average = total / len(recent_records)
     
+    if average < 100:
+        congestion_level = "舒适"
+    elif 100 <= average <= 200:
+        congestion_level = "正常"
+    else:
+        congestion_level = "拥挤"
+    
+    if len(recent_records) >= 2:
+        last_record = recent_records[0]
+        second_last_record = recent_records[1]
+        if last_record.entry_count > second_last_record.entry_count:
+            trend = "上升"
+        elif last_record.entry_count < second_last_record.entry_count:
+            trend = "下降"
+        else:
+            trend = "持平"
+    else:
+        trend = "持平"
+    
     return schemas.TouristFlowAnalytics(
         scenic_spot_id=spot_id,
         scenic_spot_name=scenic_spot.name,
         recent_records=recent_records,
-        average_entry_count=round(average, 2)
+        average_entry_count=round(average, 2),
+        congestion_level=congestion_level,
+        trend=trend
     )
 
 

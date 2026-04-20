@@ -136,6 +136,8 @@ class TouristFlowAnalytics(BaseModel):
     scenic_spot_name: str
     recent_records: List[TouristFlow]
     average_entry_count: float
+    congestion_level: str
+    trend: str
 
     class Config:
         from_attributes = True
