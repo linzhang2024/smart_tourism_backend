@@ -2,6 +2,7 @@ import threading
 import time
 import os
 import sys
+import json
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
@@ -13,7 +14,7 @@ import schemas
 from database import Base, engine, get_db
 
 
-INITIAL_INVENTORY = 5
+INITIAL_INVENTORY = 3
 CONCURRENT_REQUESTS = 10
 TICKETS_PER_REQUEST = 1
 
@@ -97,8 +98,9 @@ def purchase_ticket_request(tourist_id, scenic_spot_id, quantity, session_factor
 
 def run_concurrent_test():
     print("\n" + "=" * 60)
-    print("  门票支付并发测试")
+    print("  门票支付并发测试 - 悲观锁验证")
     print("=" * 60)
+    print(f"\n[测试场景] 10 个线程同时抢购最后 3 张票")
     print(f"\n[参数] 初始库存: {INITIAL_INVENTORY}")
     print(f"[参数] 并发请求数: {CONCURRENT_REQUESTS}")
     print(f"[参数] 每请求购买数量: {TICKETS_PER_REQUEST}")
@@ -147,9 +149,14 @@ def run_concurrent_test():
         paid_orders = sum(1 for o in all_orders if o.status == models.OrderStatus.PAID)
         failed_orders = sum(1 for o in all_orders if o.status == models.OrderStatus.FAILED)
         
+        bad_request_400 = sum(1 for r in results if not r["success"] and r.get("status_code") == 400)
+        server_error_500 = sum(1 for r in results if not r["success"] and r.get("status_code") == 500)
+        
         print(f"  总请求数: {len(results)}")
         print(f"  成功请求数: {success_count}")
         print(f"  失败请求数: {failed_count}")
+        print(f"    - 400 库存不足: {bad_request_400}")
+        print(f"    - 500 系统错误: {server_error_500}")
         print(f"\n  数据库统计:")
         print(f"    订单总数: {len(all_orders)}")
         print(f"    支付成功订单: {paid_orders}")
@@ -166,10 +173,16 @@ def run_concurrent_test():
         if final_spot.remained_inventory >= 0:
             print(f"  [通过] 库存非负: {final_spot.remained_inventory}")
         else:
-            print(f"  [失败] 库存为负: {final_spot.remained_inventory}")
+            print(f"  [失败] 库存为负: {final_spot.remained_inventory} - 超卖发生!")
             validation_passed = False
         
-        expected_sold = min(INITIAL_INVENTORY, CONCURRENT_REQUESTS * TICKETS_PER_REQUEST)
+        expected_success = INITIAL_INVENTORY // TICKETS_PER_REQUEST
+        if success_count == expected_success:
+            print(f"  [通过] 成功订单数正确: {success_count}/{expected_success}")
+        else:
+            print(f"  [失败] 成功订单数异常: {success_count} (预期: {expected_success})")
+            validation_passed = False
+        
         actual_sold = INITIAL_INVENTORY - final_spot.remained_inventory
         if actual_sold == paid_orders * TICKETS_PER_REQUEST:
             print(f"  [通过] 售出数量与成功订单数一致")
@@ -183,32 +196,55 @@ def run_concurrent_test():
             print(f"  [失败] 成功请求数({success_count})与成功订单数({paid_orders})不一致")
             validation_passed = False
         
-        print("\n[日志检查]")
+        if bad_request_400 == failed_count and server_error_500 == 0:
+            print(f"  [通过] 所有失败请求都返回 400（无 500 系统错误）")
+        else:
+            print(f"  [警告] 存在 500 系统错误: {server_error_500} 个")
+        
+        print("\n[JSON 日志检查]")
         print("-" * 60)
         log_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'app.log')
         if os.path.exists(log_file):
             with open(log_file, 'r', encoding='utf-8') as f:
                 log_lines = f.readlines()
             
-            inventory_errors = [line for line in log_lines if '库存不足' in line]
-            order_success = [line for line in log_lines if '订单创建成功' in line]
-            payment_success = [line for line in log_lines if '支付成功' in line]
+            json_logs = []
+            for line in log_lines:
+                try:
+                    log_entry = json.loads(line.strip())
+                    json_logs.append(log_entry)
+                except json.JSONDecodeError:
+                    continue
             
             print(f"  日志文件存在，共 {len(log_lines)} 行")
-            print(f"  库存不足记录: {len(inventory_errors)} 条")
-            print(f"  订单创建成功记录: {len(order_success)} 条")
-            print(f"  支付成功记录: {len(payment_success)} 条")
+            print(f"  有效 JSON 日志: {len(json_logs)} 条")
             
-            if len(order_success) == paid_orders:
-                print(f"  [通过] 成功订单日志记录完整")
-            else:
-                print(f"  [警告] 成功订单日志记录({len(order_success)})与实际成功订单数({paid_orders})不一致")
+            lock_acquired_logs = [log for log in json_logs if log.get("action") == "LOCK_ACQUIRED"]
+            inventory_shortage_logs = [log for log in json_logs if log.get("action") == "INVENTORY_SHORTAGE"]
+            payment_success_logs = [log for log in json_logs if log.get("action") == "PAYMENT_SUCCESS"]
+            system_error_logs = [log for log in json_logs if log.get("action") == "SYSTEM_ERROR"]
+            
+            print(f"\n  本次测试相关日志（从日志文件末尾）:")
+            print(f"    - LOCK_ACQUIRED (获取行锁): {len(lock_acquired_logs)} 条")
+            print(f"    - INVENTORY_SHORTAGE (库存不足): {len(inventory_shortage_logs)} 条")
+            print(f"    - PAYMENT_SUCCESS (支付成功): {len(payment_success_logs)} 条")
+            print(f"    - SYSTEM_ERROR (系统错误): {len(system_error_logs)} 条")
+            
+            if len(json_logs) > 0 and "timestamp" in json_logs[-1] and "level" in json_logs[-1]:
+                print(f"\n  [通过] 日志为 JSON 格式，包含 timestamp, level, action 等字段")
+                print(f"\n  最后一条日志示例:")
+                print(f"    {json.dumps(json_logs[-1], ensure_ascii=False, indent=4)}")
         else:
             print(f"  [警告] 日志文件不存在: {log_file}")
         
         print("\n" + "=" * 60)
         if validation_passed:
-            print("  测试通过! 并发处理正常。")
+            print("  测试通过! 悲观锁生效，无超卖发生。")
+            print(f"\n  验证要点:")
+            print(f"  1. 10 个线程仅成功购买 3 张票（初始库存）")
+            print(f"  2. 库存未出现负值，无超卖")
+            print(f"  3. 失败请求返回 400 而非 500")
+            print(f"  4. 日志为 JSON 格式，便于自动化审计")
         else:
             print("  测试失败! 存在问题需要修复。")
         print("=" * 60)

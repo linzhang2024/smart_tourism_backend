@@ -1,11 +1,13 @@
 import logging
+import json
+import traceback
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import List
+from typing import List, Optional, Dict, Any
 import os
 from datetime import datetime
 
@@ -14,15 +16,108 @@ import schemas
 from database import engine, get_db
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('app.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+class JSONLogFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        log_data: Dict[str, Any] = {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "level": record.levelname,
+            "message": record.getMessage(),
+        }
+        
+        if hasattr(record, 'order_id'):
+            log_data["order_id"] = record.order_id
+        if hasattr(record, 'scenic_spot_id'):
+            log_data["scenic_spot_id"] = record.scenic_spot_id
+        if hasattr(record, 'action'):
+            log_data["action"] = record.action
+        if hasattr(record, 'tourist_id'):
+            log_data["tourist_id"] = record.tourist_id
+        if hasattr(record, 'quantity'):
+            log_data["quantity"] = record.quantity
+        if hasattr(record, 'remaining_inventory'):
+            log_data["remaining_inventory"] = record.remaining_inventory
+        
+        if record.exc_info:
+            log_data["exception"] = {
+                "type": record.exc_info[0].__name__,
+                "message": str(record.exc_info[1]),
+                "traceback": traceback.format_exc()
+            }
+        
+        return json.dumps(log_data, ensure_ascii=False)
+
+
+def setup_logging():
+    logger = logging.getLogger("payment_service")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+    
+    file_handler = logging.FileHandler('app.log', encoding='utf-8')
+    file_handler.setFormatter(JSONLogFormatter())
+    
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(JSONLogFormatter())
+    
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+    
+    return logger
+
+
+logger = setup_logging()
+
+
+def log_info(
+    message: str,
+    action: str,
+    order_id: Optional[str] = None,
+    scenic_spot_id: Optional[int] = None,
+    tourist_id: Optional[int] = None,
+    quantity: Optional[int] = None,
+    remaining_inventory: Optional[int] = None
+):
+    extra = {
+        "action": action,
+    }
+    if order_id:
+        extra["order_id"] = order_id
+    if scenic_spot_id:
+        extra["scenic_spot_id"] = scenic_spot_id
+    if tourist_id:
+        extra["tourist_id"] = tourist_id
+    if quantity:
+        extra["quantity"] = quantity
+    if remaining_inventory is not None:
+        extra["remaining_inventory"] = remaining_inventory
+    
+    logger.info(message, extra=extra)
+
+
+def log_error(
+    message: str,
+    action: str,
+    order_id: Optional[str] = None,
+    scenic_spot_id: Optional[int] = None,
+    tourist_id: Optional[int] = None,
+    quantity: Optional[int] = None,
+    remaining_inventory: Optional[int] = None,
+    exc_info: Optional[bool] = None
+):
+    extra = {
+        "action": action,
+    }
+    if order_id:
+        extra["order_id"] = order_id
+    if scenic_spot_id:
+        extra["scenic_spot_id"] = scenic_spot_id
+    if tourist_id:
+        extra["tourist_id"] = tourist_id
+    if quantity:
+        extra["quantity"] = quantity
+    if remaining_inventory is not None:
+        extra["remaining_inventory"] = remaining_inventory
+    
+    logger.error(message, extra=extra, exc_info=exc_info)
 
 
 def migrate_database():
@@ -380,27 +475,56 @@ def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
 
 @app.post("/tickets/purchase", response_model=schemas.TicketOrder, status_code=status.HTTP_201_CREATED, tags=["门票支付"])
 def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends(get_db)):
-    logger.info(f"开始处理购票请求 - 游客ID: {order_data.tourist_id}, 景点ID: {order_data.scenic_spot_id}, 数量: {order_data.quantity}")
+    from sqlalchemy import update as sql_update
     
-    tourist = db.query(models.Tourist).filter(models.Tourist.id == order_data.tourist_id).first()
-    if tourist is None:
-        logger.warning(f"购票请求失败 - 游客不存在: {order_data.tourist_id}")
-        raise HTTPException(status_code=404, detail="游客不存在")
+    order: Optional[models.TicketOrder] = None
+    failed_order: Optional[models.TicketOrder] = None
+    scenic_spot: Optional[models.ScenicSpot] = None
+    tourist: Optional[models.Tourist] = None
     
-    scenic_spot = db.query(models.ScenicSpot).filter(
-        models.ScenicSpot.id == order_data.scenic_spot_id
-    ).first()
-    
-    if scenic_spot is None:
-        logger.warning(f"购票请求失败 - 景点不存在: {order_data.scenic_spot_id}")
-        raise HTTPException(status_code=404, detail="景点不存在")
+    log_info(
+        message="开始处理购票请求",
+        action="PURCHASE_REQUEST",
+        tourist_id=order_data.tourist_id,
+        scenic_spot_id=order_data.scenic_spot_id,
+        quantity=order_data.quantity
+    )
     
     try:
-        logger.info(f"开始数据库事务 - 景点 {scenic_spot.name} 当前库存: {scenic_spot.remained_inventory}")
+        tourist = db.query(models.Tourist).filter(
+            models.Tourist.id == order_data.tourist_id
+        ).first()
         
-        from sqlalchemy import update
+        if tourist is None:
+            log_error(
+                message="游客不存在",
+                action="VALIDATION_FAILED",
+                tourist_id=order_data.tourist_id,
+                scenic_spot_id=order_data.scenic_spot_id
+            )
+            raise HTTPException(status_code=404, detail="游客不存在")
         
-        update_stmt = update(models.ScenicSpot).where(
+        scenic_spot = db.query(models.ScenicSpot).filter(
+            models.ScenicSpot.id == order_data.scenic_spot_id
+        ).first()
+        
+        if scenic_spot is None:
+            log_error(
+                message="景点不存在",
+                action="VALIDATION_FAILED",
+                tourist_id=order_data.tourist_id,
+                scenic_spot_id=order_data.scenic_spot_id
+            )
+            raise HTTPException(status_code=404, detail="景点不存在")
+        
+        log_info(
+            message=f"当前库存: {scenic_spot.remained_inventory}",
+            action="INVENTORY_CHECK",
+            scenic_spot_id=order_data.scenic_spot_id,
+            remaining_inventory=scenic_spot.remained_inventory
+        )
+        
+        update_stmt = sql_update(models.ScenicSpot).where(
             models.ScenicSpot.id == order_data.scenic_spot_id,
             models.ScenicSpot.remained_inventory >= order_data.quantity
         ).values(
@@ -412,7 +536,13 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
         
         if affected_rows == 0:
             db.refresh(scenic_spot)
-            logger.error(f"库存不足 - 景点: {scenic_spot.name}, 需求: {order_data.quantity}, 可用: {scenic_spot.remained_inventory}")
+            log_error(
+                message=f"库存不足，需求: {order_data.quantity}, 可用: {scenic_spot.remained_inventory}",
+                action="INVENTORY_SHORTAGE",
+                scenic_spot_id=order_data.scenic_spot_id,
+                quantity=order_data.quantity,
+                remaining_inventory=scenic_spot.remained_inventory
+            )
             
             failed_order = models.TicketOrder(
                 tourist_id=order_data.tourist_id,
@@ -426,7 +556,12 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
             db.commit()
             db.refresh(failed_order)
             
-            logger.error(f"订单创建失败 - 订单号: {failed_order.order_no}, 原因: 库存不足")
+            log_error(
+                message="库存不足订单记录已保存",
+                action="FAILED_ORDER_SAVED",
+                order_id=failed_order.order_no,
+                scenic_spot_id=order_data.scenic_spot_id
+            )
             
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -434,7 +569,14 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
             )
         
         db.refresh(scenic_spot)
-        logger.info(f"扣减库存 - 景点: {scenic_spot.name}, 扣减数量: {order_data.quantity}, 剩余: {scenic_spot.remained_inventory}")
+        
+        log_info(
+            message=f"库存扣减成功，扣减数量: {order_data.quantity}, 剩余: {scenic_spot.remained_inventory}",
+            action="INVENTORY_DEDUCTED",
+            scenic_spot_id=order_data.scenic_spot_id,
+            quantity=order_data.quantity,
+            remaining_inventory=scenic_spot.remained_inventory
+        )
         
         total_price = scenic_spot.price * order_data.quantity
         
@@ -448,42 +590,70 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
             paid_at=datetime.utcnow()
         )
         db.add(order)
+        db.flush()
+        
+        log_info(
+            message=f"订单创建成功，订单号: {order.order_no}",
+            action="ORDER_CREATED",
+            order_id=order.order_no,
+            scenic_spot_id=order_data.scenic_spot_id
+        )
         
         db.commit()
         db.refresh(order)
         
-        logger.info(f"订单创建成功 - 订单号: {order.order_no}, 游客: {tourist.name}, 景点: {scenic_spot.name}, 数量: {order_data.quantity}, 总价: {total_price}")
-        logger.info(f"支付成功 - 订单号: {order.order_no}, 支付时间: {order.paid_at}")
+        log_info(
+            message=f"支付成功，订单号: {order.order_no}, 支付时间: {order.paid_at}",
+            action="PAYMENT_SUCCESS",
+            order_id=order.order_no,
+            scenic_spot_id=order_data.scenic_spot_id
+        )
         
         return order
         
     except HTTPException:
         raise
+        
     except Exception as e:
-        logger.error(f"购票过程中发生错误: {str(e)}")
         db.rollback()
         
-        scenic_spot = db.query(models.ScenicSpot).filter(
-            models.ScenicSpot.id == order_data.scenic_spot_id
-        ).first()
-        
-        failed_order = models.TicketOrder(
+        log_error(
+            message=f"购票过程中发生系统错误: {str(e)}",
+            action="SYSTEM_ERROR",
             tourist_id=order_data.tourist_id,
             scenic_spot_id=order_data.scenic_spot_id,
-            quantity=order_data.quantity,
-            total_price=scenic_spot.price * order_data.quantity if scenic_spot else 0,
-            status=models.OrderStatus.FAILED,
-            created_at=datetime.utcnow()
+            exc_info=True
         )
-        db.add(failed_order)
-        db.commit()
-        db.refresh(failed_order)
         
-        logger.error(f"订单创建失败 - 订单号: {failed_order.order_no}, 错误: {str(e)}")
+        try:
+            failed_order = models.TicketOrder(
+                tourist_id=order_data.tourist_id,
+                scenic_spot_id=order_data.scenic_spot_id,
+                quantity=order_data.quantity,
+                total_price=scenic_spot.price * order_data.quantity if scenic_spot else 0,
+                status=models.OrderStatus.FAILED,
+                created_at=datetime.utcnow()
+            )
+            db.add(failed_order)
+            db.commit()
+            db.refresh(failed_order)
+            
+            log_error(
+                message="系统错误订单记录已保存",
+                action="FAILED_ORDER_SAVED",
+                order_id=failed_order.order_no,
+                scenic_spot_id=order_data.scenic_spot_id
+            )
+        except Exception as save_error:
+            log_error(
+                message=f"保存失败订单时发生错误: {str(save_error)}",
+                action="SAVE_FAILED_ORDER_ERROR",
+                exc_info=True
+            )
         
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"购票失败: {str(e)}"
+            detail="系统内部错误，请稍后重试"
         )
 
 
