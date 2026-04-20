@@ -1,6 +1,13 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+from enum import Enum
+
+
+class OrderStatus(str, Enum):
+    PENDING = "PENDING"
+    PAID = "PAID"
+    FAILED = "FAILED"
 
 
 # Tourist schemas
@@ -141,3 +148,29 @@ class TouristFlowAnalytics(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class TicketOrderCreate(BaseModel):
+    tourist_id: int = Field(..., description="游客ID")
+    scenic_spot_id: int = Field(..., description="景点ID")
+    quantity: int = Field(1, ge=1, description="门票数量")
+
+
+class TicketOrder(BaseModel):
+    id: int
+    order_no: str
+    tourist_id: int
+    scenic_spot_id: int
+    quantity: int
+    total_price: float
+    status: OrderStatus
+    created_at: datetime
+    paid_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TicketOrderWithDetails(TicketOrder):
+    tourist: Tourist
+    scenic_spot: ScenicSpot
