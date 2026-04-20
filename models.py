@@ -1,7 +1,14 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from database import Base
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+
+def get_utc8_now():
+    utc_now = datetime.now(timezone.utc)
+    utc8_offset = timedelta(hours=8)
+    utc8_time = utc_now.astimezone(timezone(utc8_offset))
+    return utc8_time.replace(tzinfo=None)
 
 
 class Tourist(Base):
@@ -53,6 +60,6 @@ class TouristFlow(Base):
     id = Column(Integer, primary_key=True, index=True)
     scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=False)
     entry_count = Column(Integer, nullable=False)
-    record_time = Column(DateTime, default=datetime.utcnow)
+    record_time = Column(DateTime, default=get_utc8_now)
 
     scenic_spot = relationship("ScenicSpot")
