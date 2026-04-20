@@ -111,3 +111,31 @@ class ScenicSpotInventoryAlert(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# TouristFlow schemas
+class TouristFlowBase(BaseModel):
+    scenic_spot_id: int = Field(..., description="景点ID")
+    entry_count: int = Field(..., ge=0, description="入园人数")
+
+
+class TouristFlowCreate(TouristFlowBase):
+    pass
+
+
+class TouristFlow(TouristFlowBase):
+    id: int
+    record_time: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TouristFlowAnalytics(BaseModel):
+    scenic_spot_id: int
+    scenic_spot_name: str
+    recent_records: List[TouristFlow]
+    average_entry_count: float
+
+    class Config:
+        from_attributes = True

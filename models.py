@@ -45,3 +45,14 @@ class Ticket(Base):
     
     tourist = relationship("Tourist", back_populates="tickets")
     scenic_spot = relationship("ScenicSpot", back_populates="tickets")
+
+
+class TouristFlow(Base):
+    __tablename__ = "tourist_flows"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=False)
+    entry_count = Column(Integer, nullable=False)
+    record_time = Column(DateTime, default=datetime.utcnow)
+
+    scenic_spot = relationship("ScenicSpot")
