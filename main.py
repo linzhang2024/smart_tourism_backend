@@ -40,6 +40,36 @@ def get_current_user_info(
     return current_user
 
 
+@auth_router.get("/users/list", response_model=List[schemas.UserResponse], tags=["用户管理"])
+def get_users_list(
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    users = auth.get_all_users(db)
+    return users
+
+
+@auth_router.patch("/users/{user_id}/status", response_model=schemas.UserResponse, tags=["用户管理"])
+def toggle_user_status(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    user = auth.toggle_user_status(db, user_id, current_admin.id)
+    return user
+
+
+@auth_router.patch("/users/{user_id}/role", response_model=schemas.UserResponse, tags=["用户管理"])
+def update_user_role(
+    user_id: int,
+    new_role: schemas.UserRole,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    user = auth.update_user_role(db, user_id, new_role, current_admin.id)
+    return user
+
+
 CACHE_TTL_SECONDS = 10
 scenic_spot_cache: Dict[int, Dict[str, Any]] = {}
 cache_lock = threading.Lock()
