@@ -14,6 +14,7 @@ from datetime import datetime
 import models
 import schemas
 from database import engine, get_db
+from analytics_report import get_analytics_report
 
 
 class JSONLogFormatter(logging.Formatter):
@@ -669,6 +670,12 @@ def get_ticket_order(order_id: int, db: Session = Depends(get_db)):
     if order is None:
         raise HTTPException(status_code=404, detail="订单不存在")
     return order
+
+
+@app.get("/system/health", tags=["系统监控"])
+def get_system_health():
+    report = get_analytics_report()
+    return report
 
 
 if __name__ == "__main__":
