@@ -1698,6 +1698,26 @@
             }, 3000);
         }
 
+        function formatValidationError(errorData) {
+            let errorMessage = '请求失败';
+            
+            if (errorData.detail) {
+                if (Array.isArray(errorData.detail)) {
+                    const errors = errorData.detail.map(err => {
+                        const field = err.loc ? err.loc.slice(1).join('.') : '未知字段';
+                        return `[${field}]: ${err.msg}`;
+                    });
+                    errorMessage = '字段验证错误: ' + errors.join('; ');
+                } else {
+                    errorMessage = errorData.detail;
+                }
+            } else if (errorData.msg) {
+                errorMessage = errorData.msg;
+            }
+
+            return errorMessage;
+        }
+
         async function handleLogin(username, password) {
             const response = await fetch('/auth/login', {
                 method: 'POST',
@@ -1708,17 +1728,21 @@
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || '登录失败');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(formatValidationError(errorData));
             }
 
             return await response.json();
         }
 
         async function handleRegister(username, password, role, phone) {
-            const body = { username, password, role };
-            if (phone) {
-                body.phone = phone;
+            const body = { 
+                username, 
+                password,
+                role: role || 'TOURIST'
+            };
+            if (phone && phone.trim() !== '') {
+                body.phone = phone.trim();
             }
 
             const response = await fetch('/auth/register', {
@@ -1730,8 +1754,8 @@
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || '注册失败');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(formatValidationError(errorData));
             }
 
             return await response.json();
@@ -1987,7 +2011,6 @@
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                const errorMessage = errorData.detail || `请求失败 (${response.status})`;
                 
                 if (response.status === 401) {
                     clearAuthToken();
@@ -1995,11 +2018,7 @@
                     throw new Error('请先登录');
                 }
                 
-                if (response.status === 403) {
-                    throw new Error(`权限不足: ${errorMessage}`);
-                }
-                
-                throw new Error(errorMessage);
+                throw new Error(formatValidationError(errorData));
             }
 
             return await response.json();
@@ -2013,7 +2032,6 @@
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                const errorMessage = errorData.detail || `请求失败 (${response.status})`;
                 
                 if (response.status === 401) {
                     clearAuthToken();
@@ -2021,11 +2039,7 @@
                     throw new Error('请先登录');
                 }
                 
-                if (response.status === 403) {
-                    throw new Error(`权限不足: ${errorMessage}`);
-                }
-                
-                throw new Error(errorMessage);
+                throw new Error(formatValidationError(errorData));
             }
 
             return await response.json();
@@ -2039,7 +2053,6 @@
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
-                const errorMessage = errorData.detail || `请求失败 (${response.status})`;
                 
                 if (response.status === 401) {
                     clearAuthToken();
@@ -2047,11 +2060,7 @@
                     throw new Error('请先登录');
                 }
                 
-                if (response.status === 403) {
-                    throw new Error(`权限不足: ${errorMessage}`);
-                }
-                
-                throw new Error(errorMessage);
+                throw new Error(formatValidationError(errorData));
             }
 
             return await response.json();
