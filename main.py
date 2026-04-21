@@ -2,10 +2,23 @@ import logging
 import json
 import traceback
 import threading
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+
+
+API_KEY = "admin123"
+
+
+async def verify_api_key(request: Request):
+    api_key = request.headers.get("X-API-Key")
+    if api_key != API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无效的 API Key"
+        )
+    return api_key
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
@@ -748,13 +761,13 @@ def get_ticket_order(order_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/system/health", tags=["系统监控"])
-def get_system_health():
+def get_system_health(api_key: str = Depends(verify_api_key)):
     report = get_analytics_report()
     return report
 
 
 @app.get("/analytics/traffic-series", tags=["流量监控"])
-def get_traffic_series(spot_id: int, db: Session = Depends(get_db)):
+def get_traffic_series(spot_id: int, db: Session = Depends(get_db), api_key: str = Depends(verify_api_key)):
     scenic_spot = db.query(models.ScenicSpot).filter(
         models.ScenicSpot.id == spot_id
     ).first()
