@@ -395,6 +395,99 @@
             margin-top: 5px;
         }
 
+        .inventory-warning {
+            color: #ff6b35;
+            text-shadow: 0 0 20px rgba(255, 107, 53, 0.8);
+            animation: blink-orange 0.8s infinite;
+        }
+
+        @keyframes blink-orange {
+            0%, 50% { 
+                text-shadow: 0 0 20px rgba(255, 107, 53, 0.8), 0 0 40px rgba(255, 107, 53, 0.4);
+                opacity: 1;
+            }
+            51%, 100% { 
+                text-shadow: 0 0 10px rgba(255, 107, 53, 0.4);
+                opacity: 0.7;
+            }
+        }
+
+        .inventory-note {
+            font-size: 0.85rem;
+            color: #ff6b35;
+            margin-top: 8px;
+            padding: 5px 10px;
+            background: rgba(255, 107, 53, 0.1);
+            border-radius: 5px;
+            border: 1px solid rgba(255, 107, 53, 0.3);
+        }
+
+        .news-ticker {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(90deg, rgba(139, 92, 246, 0.95), rgba(0, 210, 255, 0.95));
+            padding: 12px 0;
+            z-index: 1000;
+            overflow: hidden;
+            box-shadow: 0 -4px 20px rgba(139, 92, 246, 0.4);
+        }
+
+        .news-ticker::before {
+            content: '🎫 实时播报';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, rgba(0, 0, 0, 0.8), transparent);
+            padding: 12px 30px 12px 20px;
+            color: #ffffff;
+            font-weight: 600;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+        }
+
+        .news-ticker-content {
+            display: flex;
+            animation: ticker-scroll 30s linear infinite;
+            white-space: nowrap;
+            padding-left: 150px;
+        }
+
+        .news-ticker:hover .news-ticker-content {
+            animation-play-state: paused;
+        }
+
+        .news-item {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 50px;
+            color: #ffffff;
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .news-item::before {
+            content: '🎉';
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+
+        @keyframes ticker-scroll {
+            0% {
+                transform: translateX(0);
+            }
+            100% {
+                transform: translateX(-50%);
+            }
+        }
+
+        .dashboard {
+            padding-bottom: 80px;
+        }
+
         .chart-section {
             background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
             border-radius: 15px;
@@ -685,6 +778,13 @@
                     <div class="card-value" id="averageCount">0</div>
                 </div>
 
+                <div class="card" id="inventoryCard">
+                    <div class="card-icon">🎫</div>
+                    <div class="card-title">剩余门票</div>
+                    <div class="card-value" id="remainedInventory">-</div>
+                    <div class="inventory-note" id="inventoryNote" style="display: none;"></div>
+                </div>
+
                 <div class="card congestion-level" id="congestionCard">
                     <div class="card-icon">🚦</div>
                     <div class="card-title">拥堵等级</div>
@@ -736,6 +836,11 @@
     <div class="toast" id="toast">
         <div class="toast-title">错误</div>
         <div class="toast-message" id="toastMessage">-</div>
+    </div>
+
+    <div class="news-ticker" id="newsTicker" style="display: none;">
+        <div class="news-ticker-content" id="newsTickerContent">
+        </div>
     </div>
 
     <script>
@@ -1014,6 +1119,73 @@
             return await response.json();
         }
 
+        async function fetchScenicSpot(spotId) {
+            const response = await fetch(`/scenic-spots/${spotId}`);
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '获取景点信息失败');
+            }
+
+            return await response.json();
+        }
+
+        async function fetchRecentSuccessOrders() {
+            const response = await fetch('/tickets/recent-success?limit=5');
+            
+            if (!response.ok) {
+                return [];
+            }
+
+            return await response.json();
+        }
+
+        function updateInventoryCard(spotData) {
+            const remainedInventoryEl = document.getElementById('remainedInventory');
+            const inventoryNoteEl = document.getElementById('inventoryNote');
+            
+            remainedInventoryEl.textContent = spotData.remained_inventory;
+            
+            remainedInventoryEl.classList.remove('inventory-warning');
+            
+            if (spotData.status_note) {
+                remainedInventoryEl.classList.add('inventory-warning');
+                inventoryNoteEl.textContent = spotData.status_note;
+                inventoryNoteEl.style.display = 'block';
+            } else {
+                inventoryNoteEl.style.display = 'none';
+            }
+        }
+
+        function updateNewsTicker(orders) {
+            const newsTicker = document.getElementById('newsTicker');
+            const newsTickerContent = document.getElementById('newsTickerContent');
+            
+            if (!orders || orders.length === 0) {
+                newsTicker.style.display = 'none';
+                return;
+            }
+            
+            newsTicker.style.display = 'block';
+            
+            let html = '';
+            orders.forEach(order => {
+                const message = `${order.time_ago}，${order.tourist_name} 在【${order.scenic_spot_name}】成功购票 ${order.quantity} 张`;
+                html += `<span class="news-item">${message}</span>`;
+            });
+            
+            newsTickerContent.innerHTML = html + html;
+        }
+
+        async function loadNewsTicker() {
+            try {
+                const orders = await fetchRecentSuccessOrders();
+                updateNewsTicker(orders);
+            } catch (error) {
+                console.error('Error loading news ticker:', error);
+            }
+        }
+
         async function fetchData(isAutoRefresh = false) {
             const spotId = currentSpotId || spotIdInput.value.trim();
             
@@ -1034,9 +1206,10 @@
             emptyState.style.display = 'none';
             
             try {
-                const [trafficSeriesData, analyticsData] = await Promise.all([
+                const [trafficSeriesData, analyticsData, spotData] = await Promise.all([
                     fetchTrafficSeries(spotId),
-                    fetchAnalytics(spotId)
+                    fetchAnalytics(spotId),
+                    fetchScenicSpot(spotId)
                 ]);
 
                 currentSpotId = spotId;
@@ -1044,6 +1217,7 @@
                 document.getElementById('spotName').textContent = analyticsData.scenic_spot_name;
                 document.getElementById('averageCount').textContent = analyticsData.average_entry_count;
                 
+                updateInventoryCard(spotData);
                 updateCongestionCard(analyticsData.congestion_level);
                 updateTrendCard(analyticsData.trend);
                 updateRecordsTable(trafficSeriesData.records);
@@ -1053,6 +1227,7 @@
                     dashboard.classList.add('active');
                     refreshBtn.disabled = false;
                     startAutoRefresh();
+                    loadNewsTicker();
                 }
             } catch (error) {
                 console.error('Error fetching data:', error);

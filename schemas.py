@@ -63,6 +63,7 @@ class ScenicSpotUpdate(BaseModel):
 class ScenicSpot(ScenicSpotBase):
     id: int
     created_at: datetime
+    status_note: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -101,6 +102,7 @@ class TouristWithTickets(Tourist):
 
 class ScenicSpotWithTickets(ScenicSpot):
     tickets: List[Ticket] = []
+    status_note: Optional[str] = None
 
 
 class TicketWithDetails(Ticket):
@@ -174,3 +176,15 @@ class TicketOrder(BaseModel):
 class TicketOrderWithDetails(TicketOrder):
     tourist: Tourist
     scenic_spot: ScenicSpot
+
+
+class TicketSuccessBrief(BaseModel):
+    order_no: str
+    tourist_name: str
+    scenic_spot_name: str
+    quantity: int
+    paid_at: Optional[datetime] = None
+    time_ago: str = ""
+
+    class Config:
+        from_attributes = True
