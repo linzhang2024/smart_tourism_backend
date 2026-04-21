@@ -1,6 +1,7 @@
 import logging
 import json
 import traceback
+import threading
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,12 +10,30 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+from dataclasses import dataclass
 
 import models
 import schemas
 from database import engine, get_db
 from analytics_report import get_analytics_report
+
+
+CACHE_TTL_SECONDS = 10
+scenic_spot_cache: Dict[int, Dict[str, Any]] = {}
+cache_lock = threading.Lock()
+
+log_write_lock = threading.Lock()
+
+
+class ThreadSafeFileHandler(logging.FileHandler):
+    def __init__(self, filename, mode='a', encoding=None, delay=False):
+        super().__init__(filename, mode, encoding, delay)
+        self._lock = threading.Lock()
+    
+    def emit(self, record):
+        with self._lock:
+            super().emit(record)
 
 
 class JSONLogFormatter(logging.Formatter):
@@ -53,7 +72,7 @@ def setup_logging():
     logger.setLevel(logging.INFO)
     logger.propagate = False
     
-    file_handler = logging.FileHandler('app.log', encoding='utf-8')
+    file_handler = ThreadSafeFileHandler('app.log', encoding='utf-8')
     file_handler.setFormatter(JSONLogFormatter())
     
     stream_handler = logging.StreamHandler()
@@ -296,12 +315,60 @@ def get_scenic_spots(skip: int = 0, limit: int = 100, db: Session = Depends(get_
     return spots
 
 
-@app.get("/scenic-spots/{spot_id}", response_model=schemas.ScenicSpotWithTickets, tags=["景点管理"])
-def get_scenic_spot(spot_id: int, db: Session = Depends(get_db)):
+def get_cached_scenic_spot(spot_id: int, db: Session) -> Optional[Dict[str, Any]]:
+    current_time = datetime.utcnow()
+    
+    with cache_lock:
+        if spot_id in scenic_spot_cache:
+            cache_entry = scenic_spot_cache[spot_id]
+            cache_time = cache_entry["timestamp"]
+            if (current_time - cache_time).total_seconds() < CACHE_TTL_SECONDS:
+                return cache_entry["data"]
+    
     spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == spot_id).first()
     if spot is None:
+        return None
+    
+    spot_data = {
+        "id": spot.id,
+        "name": spot.name,
+        "description": spot.description,
+        "location": spot.location,
+        "rating": spot.rating,
+        "price": spot.price,
+        "total_inventory": spot.total_inventory,
+        "remained_inventory": spot.remained_inventory,
+        "created_at": spot.created_at,
+        "tickets": spot.tickets
+    }
+    
+    with cache_lock:
+        scenic_spot_cache[spot_id] = {
+            "data": spot_data,
+            "timestamp": current_time
+        }
+    
+    return spot_data
+
+
+def invalidate_scenic_spot_cache(spot_id: int):
+    with cache_lock:
+        if spot_id in scenic_spot_cache:
+            del scenic_spot_cache[spot_id]
+
+
+@app.get("/scenic-spots/{spot_id}", response_model=schemas.ScenicSpotWithTickets, tags=["景点管理"])
+def get_scenic_spot(spot_id: int, db: Session = Depends(get_db)):
+    spot_data = get_cached_scenic_spot(spot_id, db)
+    if spot_data is None:
         raise HTTPException(status_code=404, detail="景点不存在")
-    return spot
+    
+    class CachedSpot:
+        def __init__(self, data):
+            for key, value in data.items():
+                setattr(self, key, value)
+    
+    return CachedSpot(spot_data)
 
 
 @app.put("/scenic-spots/{spot_id}", response_model=schemas.ScenicSpot, tags=["景点管理"])
@@ -315,6 +382,9 @@ def update_scenic_spot(spot_id: int, spot: schemas.ScenicSpotUpdate, db: Session
     
     db.commit()
     db.refresh(db_spot)
+    
+    invalidate_scenic_spot_cache(spot_id)
+    
     return db_spot
 
 
@@ -326,6 +396,9 @@ def delete_scenic_spot(spot_id: int, db: Session = Depends(get_db)):
     
     db.delete(db_spot)
     db.commit()
+    
+    invalidate_scenic_spot_cache(spot_id)
+    
     return None
 
 
@@ -602,6 +675,8 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
         
         db.commit()
         db.refresh(order)
+        
+        invalidate_scenic_spot_cache(order_data.scenic_spot_id)
         
         log_info(
             message=f"支付成功，订单号: {order.order_no}, 支付时间: {order.paid_at}",
