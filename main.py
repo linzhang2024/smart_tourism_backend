@@ -678,6 +678,40 @@ def get_system_health():
     return report
 
 
+@app.get("/analytics/traffic-series", tags=["流量监控"])
+def get_traffic_series(spot_id: int, db: Session = Depends(get_db)):
+    scenic_spot = db.query(models.ScenicSpot).filter(
+        models.ScenicSpot.id == spot_id
+    ).first()
+    if scenic_spot is None:
+        raise HTTPException(status_code=404, detail="景点不存在")
+
+    recent_records = db.query(models.TouristFlow).filter(
+        models.TouristFlow.scenic_spot_id == spot_id
+    ).order_by(models.TouristFlow.record_time.desc()).limit(10).all()
+
+    times = []
+    values = []
+
+    for record in reversed(recent_records):
+        times.append(record.record_time.strftime("%H:%M:%S"))
+        values.append(record.entry_count)
+
+    return {
+        "spot_id": spot_id,
+        "spot_name": scenic_spot.name,
+        "times": times,
+        "values": values,
+        "records": [
+            {
+                "time": record.record_time.strftime("%H:%M:%S"),
+                "entry_count": record.entry_count
+            }
+            for record in reversed(recent_records)
+        ]
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     
