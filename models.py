@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum as SQLEnum, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime, timedelta, timezone
@@ -13,10 +13,30 @@ def get_utc8_now():
     return utc8_time.replace(tzinfo=None)
 
 
+class UserRole(str, Enum):
+    TOURIST = "TOURIST"
+    STAFF = "STAFF"
+    ADMIN = "ADMIN"
+
+
 class OrderStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
     FAILED = "FAILED"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(SQLEnum(UserRole), default=UserRole.TOURIST, nullable=False)
+    phone = Column(String(20))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    orders = relationship("TicketOrder", back_populates="user")
 
 
 class TicketOrder(Base):
@@ -24,7 +44,7 @@ class TicketOrder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_no = Column(String(36), unique=True, nullable=False, default=lambda: str(uuid.uuid4()))
-    tourist_id = Column(Integer, ForeignKey("tourists.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=False)
     quantity = Column(Integer, default=1)
     total_price = Column(Float, nullable=False)
@@ -32,7 +52,7 @@ class TicketOrder(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
 
-    tourist = relationship("Tourist")
+    user = relationship("User", back_populates="orders")
     scenic_spot = relationship("ScenicSpot")
 
 
