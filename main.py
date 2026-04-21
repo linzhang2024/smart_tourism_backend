@@ -325,7 +325,32 @@ def create_scenic_spot(spot: schemas.ScenicSpotCreate, db: Session = Depends(get
 @app.get("/scenic-spots/", response_model=List[schemas.ScenicSpot], tags=["景点管理"])
 def get_scenic_spots(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     spots = db.query(models.ScenicSpot).offset(skip).limit(limit).all()
-    return spots
+    
+    result = []
+    for spot in spots:
+        spot_dict = {
+            "id": spot.id,
+            "name": spot.name,
+            "description": spot.description,
+            "location": spot.location,
+            "rating": spot.rating,
+            "price": spot.price,
+            "total_inventory": spot.total_inventory,
+            "remained_inventory": spot.remained_inventory,
+            "created_at": spot.created_at,
+            "status_note": get_scenic_spot_status_note(spot)
+        }
+        result.append(spot_dict)
+    
+    return result
+
+
+def get_scenic_spot_status_note(spot: models.ScenicSpot) -> Optional[str]:
+    if spot.total_inventory > 0:
+        inventory_ratio = spot.remained_inventory / spot.total_inventory
+        if inventory_ratio < 0.10:
+            return "🔥 余票紧张，抓紧下单"
+    return None
 
 
 def get_cached_scenic_spot(spot_id: int, db: Session) -> Optional[Dict[str, Any]]:
@@ -342,6 +367,8 @@ def get_cached_scenic_spot(spot_id: int, db: Session) -> Optional[Dict[str, Any]
     if spot is None:
         return None
     
+    status_note = get_scenic_spot_status_note(spot)
+    
     spot_data = {
         "id": spot.id,
         "name": spot.name,
@@ -352,7 +379,8 @@ def get_cached_scenic_spot(spot_id: int, db: Session) -> Optional[Dict[str, Any]
         "total_inventory": spot.total_inventory,
         "remained_inventory": spot.remained_inventory,
         "created_at": spot.created_at,
-        "tickets": spot.tickets
+        "tickets": spot.tickets,
+        "status_note": status_note
     }
     
     with cache_lock:
@@ -578,6 +606,19 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
     )
     
     try:
+        if order_data.quantity > 5:
+            log_error(
+                message=f"单笔购票数量超限: {order_data.quantity} 张",
+                action="QUANTITY_LIMIT_EXCEEDED",
+                tourist_id=order_data.tourist_id,
+                scenic_spot_id=order_data.scenic_spot_id,
+                quantity=order_data.quantity
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="单笔订单最多购买 5 张门票"
+            )
+        
         tourist = db.query(models.Tourist).filter(
             models.Tourist.id == order_data.tourist_id
         ).first()
@@ -698,6 +739,15 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
             scenic_spot_id=order_data.scenic_spot_id
         )
         
+        log_info(
+            message=f"祝贺游客 [{order_data.tourist_id}] 抢票成功！请提醒其准时入园。",
+            action="TICKET_SUCCESS_NOTIFICATION",
+            order_id=order.order_no,
+            tourist_id=order_data.tourist_id,
+            scenic_spot_id=order_data.scenic_spot_id,
+            quantity=order_data.quantity
+        )
+        
         return order
         
     except HTTPException:
@@ -758,6 +808,64 @@ def get_ticket_order(order_id: int, db: Session = Depends(get_db)):
     if order is None:
         raise HTTPException(status_code=404, detail="订单不存在")
     return order
+
+
+def get_time_ago(dt: datetime) -> str:
+    if dt is None:
+        return "刚刚"
+    
+    now = datetime.utcnow()
+    diff = now - dt
+    
+    seconds = diff.total_seconds()
+    
+    if seconds < 60:
+        return "刚刚"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        return f"{minutes} 分钟前"
+    elif seconds < 86400:
+        hours = int(seconds // 3600)
+        return f"{hours} 小时前"
+    else:
+        days = int(seconds // 86400)
+        return f"{days} 天前"
+
+
+@app.get("/tickets/recent-success", response_model=List[schemas.TicketSuccessBrief], tags=["门票支付"])
+def get_recent_success_orders(limit: int = 5, db: Session = Depends(get_db)):
+    orders = db.query(models.TicketOrder).filter(
+        models.TicketOrder.status == models.OrderStatus.PAID
+    ).order_by(
+        models.TicketOrder.paid_at.desc()
+    ).limit(limit).all()
+    
+    result = []
+    for order in orders:
+        tourist = db.query(models.Tourist).filter(
+            models.Tourist.id == order.tourist_id
+        ).first()
+        
+        scenic_spot = db.query(models.ScenicSpot).filter(
+            models.ScenicSpot.id == order.scenic_spot_id
+        ).first()
+        
+        tourist_name = tourist.name if tourist else "未知游客"
+        scenic_spot_name = scenic_spot.name if scenic_spot else "未知景点"
+        
+        time_ago = get_time_ago(order.paid_at)
+        
+        brief = schemas.TicketSuccessBrief(
+            order_no=order.order_no,
+            tourist_name=tourist_name,
+            scenic_spot_name=scenic_spot_name,
+            quantity=order.quantity,
+            paid_at=order.paid_at,
+            time_ago=time_ago
+        )
+        result.append(brief)
+    
+    return result
 
 
 @app.get("/system/health", tags=["系统监控"])
