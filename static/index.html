@@ -986,8 +986,14 @@
             autoIndicator.style.display = 'none';
         }
 
+        const API_KEY = "admin123";
+        
         async function fetchTrafficSeries(spotId) {
-            const response = await fetch(`/analytics/traffic-series?spot_id=${spotId}`);
+            const response = await fetch(`/analytics/traffic-series?spot_id=${spotId}`, {
+                headers: {
+                    'X-API-Key': API_KEY
+                }
+            });
             
             if (!response.ok) {
                 const errorData = await response.json();
