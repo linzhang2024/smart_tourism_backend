@@ -1,12 +1,10 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from pydantic import BaseModel
-from enum import Enum
 
 import models
 import schemas
@@ -84,7 +82,10 @@ async def get_current_active_user(
     current_user: models.User = Depends(get_current_user)
 ) -> models.User:
     if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="用户已被禁用")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已锁定"
+        )
     return current_user
 
 
@@ -131,6 +132,12 @@ def login_user(db: Session, login_data: schemas.UserLogin) -> schemas.Token:
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已锁定"
+        )
+    
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username, "role": user.role.value},
@@ -151,3 +158,45 @@ def login_user(db: Session, login_data: schemas.UserLogin) -> schemas.Token:
         token_type="bearer",
         user=user_response
     )
+
+
+def get_all_users(db: Session) -> List[models.User]:
+    return db.query(models.User).order_by(models.User.id).all()
+
+
+def get_user_by_id(db: Session, user_id: int) -> Optional[models.User]:
+    return db.query(models.User).filter(models.User.id == user_id).first()
+
+
+def toggle_user_status(db: Session, user_id: int, current_admin_id: int) -> models.User:
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    
+    if user.id == current_admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能禁用自己的账号"
+        )
+    
+    user.is_active = not user.is_active
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def update_user_role(db: Session, user_id: int, new_role: models.UserRole, current_admin_id: int) -> models.User:
+    user = get_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    
+    user.role = new_role
+    db.commit()
+    db.refresh(user)
+    return user

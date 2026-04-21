@@ -232,6 +232,233 @@
             border-color: rgba(0, 255, 136, 0.4) !important;
         }
 
+        .user-management-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .user-management-section.active {
+            display: block;
+        }
+
+        .user-table-container {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .user-table-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #ff006e, #8b5cf6, #00d2ff);
+        }
+
+        .user-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .user-table-header h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-table-header h3::before {
+            content: '';
+            width: 5px;
+            height: 28px;
+            background: linear-gradient(180deg, #ff006e, #8b5cf6);
+            border-radius: 3px;
+        }
+
+        .btn-refresh-users {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-refresh-users:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-toggle-status {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-toggle-status.active {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+            border: 1px solid rgba(255, 68, 68, 0.4);
+        }
+
+        .btn-toggle-status.active:hover {
+            background: rgba(255, 68, 68, 0.3);
+        }
+
+        .btn-toggle-status.inactive {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid rgba(0, 255, 136, 0.4);
+        }
+
+        .btn-toggle-status.inactive:hover {
+            background: rgba(0, 255, 136, 0.3);
+        }
+
+        .btn-toggle-status:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .role-select {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
+            background: rgba(10, 10, 26, 0.8);
+            color: #ffffff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .role-select:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+        }
+
+        .role-select option {
+            background: rgba(10, 10, 26, 0.95);
+            color: #ffffff;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-badge.active {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid rgba(0, 255, 136, 0.4);
+        }
+
+        .status-badge.inactive {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+            border: 1px solid rgba(255, 68, 68, 0.4);
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .role-badge.admin {
+            background: rgba(255, 0, 110, 0.2);
+            color: #ff006e;
+            border: 1px solid rgba(255, 0, 110, 0.4);
+        }
+
+        .role-badge.staff {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+        }
+
+        .role-badge.tourist {
+            background: rgba(0, 210, 255, 0.2);
+            color: #00d2ff;
+            border: 1px solid rgba(0, 210, 255, 0.4);
+        }
+
+        .welcome-text {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            padding: 8px 16px;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .welcome-text .role-label {
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            background: rgba(0, 210, 255, 0.2);
+            color: #00d2ff;
+        }
+
+        .welcome-text .role-label.admin {
+            background: rgba(255, 0, 110, 0.2);
+            color: #ff006e;
+        }
+
+        .welcome-text .role-label.staff {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+        }
+
+        .user-table .action-cell {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        @media (max-width: 768px) {
+            .user-table .action-cell {
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            .welcome-text {
+                position: static;
+                margin-bottom: 10px;
+                display: inline-block;
+            }
+        }
+
         .header::before {
             content: '';
             position: absolute;
@@ -916,6 +1143,10 @@
     <div class="container">
         <div class="header">
             <span class="version-tag">v2.0 动态版</span>
+            <div class="welcome-text" id="welcomeText" style="display: none;">
+                欢迎，<span id="welcomeUsername">-</span>
+                <span class="role-label" id="welcomeRole">-</span>
+            </div>
             <div class="auth-controls" id="authControls">
                 <button class="btn-auth btn-login" id="loginBtn">登录</button>
             </div>
@@ -1049,6 +1280,33 @@
                         </tr>
                     </thead>
                     <tbody id="recordsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="user-management-section" id="userManagementSection">
+            <div class="user-table-container">
+                <div class="user-table-header">
+                    <h3>用户管理</h3>
+                    <button class="btn-refresh-users" id="refreshUsersBtn">
+                        <span class="refresh-icon">🔄</span>
+                        刷新列表
+                    </button>
+                </div>
+                <table class="records-table user-table" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>角色</th>
+                            <th>状态</th>
+                            <th>手机号</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
                     </tbody>
                 </table>
             </div>
@@ -1341,6 +1599,10 @@
 
         function updateAuthUI() {
             const authControls = document.getElementById('authControls');
+            const welcomeText = document.getElementById('welcomeText');
+            const welcomeUsername = document.getElementById('welcomeUsername');
+            const welcomeRole = document.getElementById('welcomeRole');
+            const userManagementSection = document.getElementById('userManagementSection');
             const token = getAuthToken();
             
             if (token) {
@@ -1357,6 +1619,19 @@
                         <button class="btn-auth btn-logout" id="logoutBtn">登出</button>
                     `;
                     
+                    welcomeText.style.display = 'block';
+                    welcomeUsername.textContent = username;
+                    welcomeRole.textContent = role;
+                    welcomeRole.className = 'role-label';
+                    welcomeRole.classList.add(role.toLowerCase());
+                    
+                    if (role === 'ADMIN') {
+                        userManagementSection.classList.add('active');
+                        loadUsers();
+                    } else {
+                        userManagementSection.classList.remove('active');
+                    }
+                    
                     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
                     currentUser = { username, role };
                 } catch (e) {
@@ -1365,6 +1640,8 @@
                 }
             } else {
                 showLoginButton();
+                welcomeText.style.display = 'none';
+                userManagementSection.classList.remove('active');
                 currentUser = null;
             }
         }
@@ -1676,6 +1953,212 @@
             } catch (error) {
                 showToast(error.message);
             }
+        });
+
+        let currentUserId = null;
+
+        async function getCurrentUserInfo() {
+            try {
+                const response = await fetch('/auth/me', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                        clearAuthToken();
+                        updateAuthUI();
+                    }
+                    return null;
+                }
+
+                const data = await response.json();
+                currentUserId = data.id;
+                return data;
+            } catch (error) {
+                console.error('获取当前用户信息失败:', error);
+                return null;
+            }
+        }
+
+        async function fetchUsers() {
+            const response = await fetch('/auth/users/list', {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.detail || `请求失败 (${response.status})`;
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                if (response.status === 403) {
+                    throw new Error(`权限不足: ${errorMessage}`);
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            return await response.json();
+        }
+
+        async function toggleUserStatusApi(userId) {
+            const response = await fetch(`/auth/users/${userId}/status`, {
+                method: 'PATCH',
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.detail || `请求失败 (${response.status})`;
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                if (response.status === 403) {
+                    throw new Error(`权限不足: ${errorMessage}`);
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            return await response.json();
+        }
+
+        async function updateUserRoleApi(userId, newRole) {
+            const response = await fetch(`/auth/users/${userId}/role?new_role=${newRole}`, {
+                method: 'PATCH',
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                const errorMessage = errorData.detail || `请求失败 (${response.status})`;
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                if (response.status === 403) {
+                    throw new Error(`权限不足: ${errorMessage}`);
+                }
+                
+                throw new Error(errorMessage);
+            }
+
+            return await response.json();
+        }
+
+        function getRoleBadgeClass(role) {
+            switch (role) {
+                case 'ADMIN': return 'admin';
+                case 'STAFF': return 'staff';
+                default: return 'tourist';
+            }
+        }
+
+        function renderUsersTable(users) {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+
+            if (!users || users.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td colspan="7" style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 30px;">
+                        暂无用户数据
+                    </td>
+                `;
+                tbody.appendChild(tr);
+                return;
+            }
+
+            users.forEach(user => {
+                const isCurrentUser = currentUserId && currentUserId === user.id;
+                const tr = document.createElement('tr');
+                const statusBadgeClass = user.is_active ? 'active' : 'inactive';
+                const statusText = user.is_active ? '正常' : '禁用';
+                const toggleBtnClass = user.is_active ? 'active' : 'inactive';
+                const toggleBtnText = user.is_active ? '禁用' : '启用';
+                const isDisabled = isCurrentUser ? 'disabled' : '';
+
+                tr.innerHTML = `
+                    <td>${user.id}</td>
+                    <td>${user.username}</td>
+                    <td>
+                        <select class="role-select" data-user-id="${user.id}" ${isDisabled}>
+                            <option value="TOURIST" ${user.role === 'TOURIST' ? 'selected' : ''}>游客 (TOURIST)</option>
+                            <option value="STAFF" ${user.role === 'STAFF' ? 'selected' : ''}>员工 (STAFF)</option>
+                            <option value="ADMIN" ${user.role === 'ADMIN' ? 'selected' : ''}>管理员 (ADMIN)</option>
+                        </select>
+                    </td>
+                    <td>
+                        <span class="status-badge ${statusBadgeClass}">${statusText}</span>
+                    </td>
+                    <td>${user.phone || '-'}</td>
+                    <td>${new Date(user.created_at).toLocaleString('zh-CN')}</td>
+                    <td class="action-cell">
+                        <button class="btn-toggle-status ${toggleBtnClass}" data-user-id="${user.id}" ${isDisabled}>
+                            ${toggleBtnText}
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.querySelectorAll('.btn-toggle-status').forEach(btn => {
+                btn.addEventListener('click', handleToggleStatus);
+            });
+
+            document.querySelectorAll('.role-select').forEach(select => {
+                select.addEventListener('change', handleRoleChange);
+            });
+        }
+
+        async function loadUsers() {
+            try {
+                await getCurrentUserInfo();
+                const users = await fetchUsers();
+                renderUsersTable(users);
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        async function handleToggleStatus(e) {
+            const userId = parseInt(e.target.dataset.userId);
+            
+            try {
+                await toggleUserStatusApi(userId);
+                showSuccessToast('状态已更新');
+                await loadUsers();
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        async function handleRoleChange(e) {
+            const userId = parseInt(e.target.dataset.userId);
+            const newRole = e.target.value;
+            
+            try {
+                await updateUserRoleApi(userId, newRole);
+                showSuccessToast('角色已更新');
+            } catch (error) {
+                showToast(error.message);
+                e.target.value = e.target.querySelector('option:checked')?.value || 'TOURIST';
+            }
+        }
+
+        document.getElementById('refreshUsersBtn').addEventListener('click', () => {
+            loadUsers();
         });
 
         document.addEventListener('DOMContentLoaded', () => {
