@@ -4,10 +4,51 @@ from datetime import datetime
 from enum import Enum
 
 
+class UserRole(str, Enum):
+    TOURIST = "TOURIST"
+    STAFF = "STAFF"
+    ADMIN = "ADMIN"
+
+
 class OrderStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
     FAILED = "FAILED"
+
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=100, description="用户名")
+    password: str = Field(..., min_length=6, description="密码")
+    phone: Optional[str] = Field(None, max_length=20, description="手机号")
+    role: UserRole = Field(default=UserRole.TOURIST, description="用户角色")
+
+
+class UserLogin(BaseModel):
+    username: str = Field(..., description="用户名")
+    password: str = Field(..., description="密码")
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    role: UserRole
+    phone: Optional[str]
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    role: Optional[UserRole] = None
 
 
 # Tourist schemas
@@ -153,7 +194,7 @@ class TouristFlowAnalytics(BaseModel):
 
 
 class TicketOrderCreate(BaseModel):
-    tourist_id: int = Field(..., description="游客ID")
+    user_id: int = Field(..., description="用户ID")
     scenic_spot_id: int = Field(..., description="景点ID")
     quantity: int = Field(1, ge=1, description="门票数量")
 
@@ -161,7 +202,7 @@ class TicketOrderCreate(BaseModel):
 class TicketOrder(BaseModel):
     id: int
     order_no: str
-    tourist_id: int
+    user_id: int
     scenic_spot_id: int
     quantity: int
     total_price: float
@@ -174,7 +215,7 @@ class TicketOrder(BaseModel):
 
 
 class TicketOrderWithDetails(TicketOrder):
-    tourist: Tourist
+    user: UserResponse
     scenic_spot: ScenicSpot
 
 

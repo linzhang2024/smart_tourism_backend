@@ -2,23 +2,10 @@ import logging
 import json
 import traceback
 import threading
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-
-
-API_KEY = "admin123"
-
-
-async def verify_api_key(request: Request):
-    api_key = request.headers.get("X-API-Key")
-    if api_key != API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="无效的 API Key"
-        )
-    return api_key
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
@@ -28,8 +15,29 @@ from dataclasses import dataclass
 
 import models
 import schemas
+import auth
 from database import engine, get_db
 from analytics_report import get_analytics_report
+
+
+auth_router = APIRouter(prefix="/auth", tags=["认证管理"])
+
+
+@auth_router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
+def register(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
+    return auth.register_user(db, user_data)
+
+
+@auth_router.post("/login", response_model=schemas.Token)
+def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
+    return auth.login_user(db, login_data)
+
+
+@auth_router.get("/me", response_model=schemas.UserResponse)
+def get_current_user_info(
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    return current_user
 
 
 CACHE_TTL_SECONDS = 10
@@ -197,6 +205,8 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 if os.path.exists(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+app.include_router(auth_router)
+
 
 @app.get("/", tags=["根路径"])
 def root():
@@ -307,9 +317,13 @@ def get_inventory_status(spot_id: int, db: Session = Depends(get_db)):
     )
 
 
-# ScenicSpot endpoints
+# ScenicSpot endpoints - 仅限 STAFF 角色
 @app.post("/scenic-spots/", response_model=schemas.ScenicSpot, status_code=status.HTTP_201_CREATED, tags=["景点管理"])
-def create_scenic_spot(spot: schemas.ScenicSpotCreate, db: Session = Depends(get_db)):
+def create_scenic_spot(
+    spot: schemas.ScenicSpotCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.STAFF))
+):
     spot_data = spot.model_dump()
     
     if spot_data.get("total_inventory") is not None and spot_data.get("remained_inventory") is None:
@@ -413,7 +427,12 @@ def get_scenic_spot(spot_id: int, db: Session = Depends(get_db)):
 
 
 @app.put("/scenic-spots/{spot_id}", response_model=schemas.ScenicSpot, tags=["景点管理"])
-def update_scenic_spot(spot_id: int, spot: schemas.ScenicSpotUpdate, db: Session = Depends(get_db)):
+def update_scenic_spot(
+    spot_id: int, 
+    spot: schemas.ScenicSpotUpdate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.STAFF))
+):
     db_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == spot_id).first()
     if db_spot is None:
         raise HTTPException(status_code=404, detail="景点不存在")
@@ -430,7 +449,11 @@ def update_scenic_spot(spot_id: int, spot: schemas.ScenicSpotUpdate, db: Session
 
 
 @app.delete("/scenic-spots/{spot_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["景点管理"])
-def delete_scenic_spot(spot_id: int, db: Session = Depends(get_db)):
+def delete_scenic_spot(
+    spot_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.STAFF))
+):
     db_spot = db.query(models.ScenicSpot).filter(models.ScenicSpot.id == spot_id).first()
     if db_spot is None:
         raise HTTPException(status_code=404, detail="景点不存在")
@@ -589,18 +612,22 @@ def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/tickets/purchase", response_model=schemas.TicketOrder, status_code=status.HTTP_201_CREATED, tags=["门票支付"])
-def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends(get_db)):
+def purchase_ticket(
+    order_data: schemas.TicketOrderCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.TOURIST))
+):
     from sqlalchemy import update as sql_update
     
     order: Optional[models.TicketOrder] = None
     failed_order: Optional[models.TicketOrder] = None
     scenic_spot: Optional[models.ScenicSpot] = None
-    tourist: Optional[models.Tourist] = None
+    user: Optional[models.User] = None
     
     log_info(
         message="开始处理购票请求",
         action="PURCHASE_REQUEST",
-        tourist_id=order_data.tourist_id,
+        tourist_id=order_data.user_id,
         scenic_spot_id=order_data.scenic_spot_id,
         quantity=order_data.quantity
     )
@@ -610,7 +637,7 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
             log_error(
                 message=f"单笔购票数量超限: {order_data.quantity} 张",
                 action="QUANTITY_LIMIT_EXCEEDED",
-                tourist_id=order_data.tourist_id,
+                tourist_id=order_data.user_id,
                 scenic_spot_id=order_data.scenic_spot_id,
                 quantity=order_data.quantity
             )
@@ -619,18 +646,18 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
                 detail="单笔订单最多购买 5 张门票"
             )
         
-        tourist = db.query(models.Tourist).filter(
-            models.Tourist.id == order_data.tourist_id
+        user = db.query(models.User).filter(
+            models.User.id == order_data.user_id
         ).first()
         
-        if tourist is None:
+        if user is None:
             log_error(
-                message="游客不存在",
+                message="用户不存在",
                 action="VALIDATION_FAILED",
-                tourist_id=order_data.tourist_id,
+                tourist_id=order_data.user_id,
                 scenic_spot_id=order_data.scenic_spot_id
             )
-            raise HTTPException(status_code=404, detail="游客不存在")
+            raise HTTPException(status_code=404, detail="用户不存在")
         
         scenic_spot = db.query(models.ScenicSpot).filter(
             models.ScenicSpot.id == order_data.scenic_spot_id
@@ -640,7 +667,7 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
             log_error(
                 message="景点不存在",
                 action="VALIDATION_FAILED",
-                tourist_id=order_data.tourist_id,
+                tourist_id=order_data.user_id,
                 scenic_spot_id=order_data.scenic_spot_id
             )
             raise HTTPException(status_code=404, detail="景点不存在")
@@ -673,7 +700,7 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
             )
             
             failed_order = models.TicketOrder(
-                tourist_id=order_data.tourist_id,
+                user_id=order_data.user_id,
                 scenic_spot_id=order_data.scenic_spot_id,
                 quantity=order_data.quantity,
                 total_price=scenic_spot.price * order_data.quantity,
@@ -709,7 +736,7 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
         total_price = scenic_spot.price * order_data.quantity
         
         order = models.TicketOrder(
-            tourist_id=order_data.tourist_id,
+            user_id=order_data.user_id,
             scenic_spot_id=order_data.scenic_spot_id,
             quantity=order_data.quantity,
             total_price=total_price,
@@ -740,10 +767,10 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
         )
         
         log_info(
-            message=f"祝贺游客 [{order_data.tourist_id}] 抢票成功！请提醒其准时入园。",
+            message=f"祝贺用户 [{order_data.user_id}] 抢票成功！请提醒其准时入园。",
             action="TICKET_SUCCESS_NOTIFICATION",
             order_id=order.order_no,
-            tourist_id=order_data.tourist_id,
+            tourist_id=order_data.user_id,
             scenic_spot_id=order_data.scenic_spot_id,
             quantity=order_data.quantity
         )
@@ -759,14 +786,14 @@ def purchase_ticket(order_data: schemas.TicketOrderCreate, db: Session = Depends
         log_error(
             message=f"购票过程中发生系统错误: {str(e)}",
             action="SYSTEM_ERROR",
-            tourist_id=order_data.tourist_id,
+            tourist_id=order_data.user_id,
             scenic_spot_id=order_data.scenic_spot_id,
             exc_info=True
         )
         
         try:
             failed_order = models.TicketOrder(
-                tourist_id=order_data.tourist_id,
+                user_id=order_data.user_id,
                 scenic_spot_id=order_data.scenic_spot_id,
                 quantity=order_data.quantity,
                 total_price=scenic_spot.price * order_data.quantity if scenic_spot else 0,
@@ -842,15 +869,15 @@ def get_recent_success_orders(limit: int = 5, db: Session = Depends(get_db)):
     
     result = []
     for order in orders:
-        tourist = db.query(models.Tourist).filter(
-            models.Tourist.id == order.tourist_id
+        user = db.query(models.User).filter(
+            models.User.id == order.user_id
         ).first()
         
         scenic_spot = db.query(models.ScenicSpot).filter(
             models.ScenicSpot.id == order.scenic_spot_id
         ).first()
         
-        tourist_name = tourist.name if tourist else "未知游客"
+        tourist_name = user.username if user else "未知用户"
         scenic_spot_name = scenic_spot.name if scenic_spot else "未知景点"
         
         time_ago = get_time_ago(order.paid_at)
@@ -869,13 +896,19 @@ def get_recent_success_orders(limit: int = 5, db: Session = Depends(get_db)):
 
 
 @app.get("/system/health", tags=["系统监控"])
-def get_system_health(api_key: str = Depends(verify_api_key)):
+def get_system_health(
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
     report = get_analytics_report()
     return report
 
 
 @app.get("/analytics/traffic-series", tags=["流量监控"])
-def get_traffic_series(spot_id: int, db: Session = Depends(get_db), api_key: str = Depends(verify_api_key)):
+def get_traffic_series(
+    spot_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
     scenic_spot = db.query(models.ScenicSpot).filter(
         models.ScenicSpot.id == spot_id
     ).first()

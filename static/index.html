@@ -49,6 +49,189 @@
             overflow: hidden;
         }
 
+        .auth-controls {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+        }
+
+        .user-info .username {
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        .user-info .role {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(0, 210, 255, 0.2);
+            color: #00d2ff;
+        }
+
+        .btn-auth {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 1px;
+        }
+
+        .btn-login {
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+            color: #ffffff;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 210, 255, 0.5);
+        }
+
+        .btn-logout {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+            border: 1px solid rgba(255, 68, 68, 0.4);
+        }
+
+        .btn-logout:hover {
+            background: rgba(255, 68, 68, 0.3);
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 10, 26, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: linear-gradient(135deg, rgba(30, 30, 60, 0.95), rgba(20, 20, 40, 0.95));
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            box-shadow: 0 20px 60px rgba(139, 92, 246, 0.3);
+        }
+
+        .modal-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(90deg, #00d2ff, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 14px 18px;
+            font-size: 1rem;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            background: rgba(10, 10, 26, 0.8);
+            color: #ffffff;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+        }
+
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .form-actions .btn {
+            flex: 1;
+            padding: 14px;
+        }
+
+        .btn-cancel {
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .switch-auth {
+            text-align: center;
+            margin-top: 20px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .switch-auth a {
+            color: #00d2ff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .switch-auth a:hover {
+            text-decoration: underline;
+        }
+
+        .toast-success {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.9), rgba(0, 200, 100, 0.9)) !important;
+            border-color: rgba(0, 255, 136, 0.4) !important;
+        }
+
         .header::before {
             content: '';
             position: absolute;
@@ -733,8 +916,47 @@
     <div class="container">
         <div class="header">
             <span class="version-tag">v2.0 动态版</span>
+            <div class="auth-controls" id="authControls">
+                <button class="btn-auth btn-login" id="loginBtn">登录</button>
+            </div>
             <h1>智慧旅游实时流量监控看板</h1>
             <p class="subtitle">实时监控景区人流量，智能分析拥堵状况 | 5秒自动刷新</p>
+        </div>
+
+        <div class="modal-overlay" id="loginModal">
+            <div class="modal">
+                <h2 class="modal-title" id="modalTitle">用户登录</h2>
+                <form id="authForm">
+                    <div class="form-group" id="registerRoleGroup" style="display: none;">
+                        <label for="role">角色</label>
+                        <select id="role" name="role">
+                            <option value="TOURIST">游客 (TOURIST)</option>
+                            <option value="STAFF">员工 (STAFF)</option>
+                            <option value="ADMIN">管理员 (ADMIN)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="username">用户名</label>
+                        <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">密码</label>
+                        <input type="password" id="password" name="password" placeholder="请输入密码" required>
+                    </div>
+                    <div class="form-group" id="registerPhoneGroup" style="display: none;">
+                        <label for="phone">手机号 (可选)</label>
+                        <input type="text" id="phone" name="phone" placeholder="请输入手机号">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancelBtn">取消</button>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">登录</button>
+                    </div>
+                    <div class="switch-auth">
+                        <span id="switchText">还没有账号？</span>
+                        <a id="switchLink">立即注册</a>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <div class="control-panel">
@@ -1091,17 +1313,176 @@
             autoIndicator.style.display = 'none';
         }
 
-        const API_KEY = "admin123";
-        
+        let currentUser = null;
+        let isLoginMode = true;
+
+        function getAuthToken() {
+            return localStorage.getItem('auth_token');
+        }
+
+        function setAuthToken(token) {
+            localStorage.setItem('auth_token', token);
+        }
+
+        function clearAuthToken() {
+            localStorage.removeItem('auth_token');
+        }
+
+        function getAuthHeaders() {
+            const token = getAuthToken();
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            return headers;
+        }
+
+        function updateAuthUI() {
+            const authControls = document.getElementById('authControls');
+            const token = getAuthToken();
+            
+            if (token) {
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const username = payload.sub;
+                    const role = payload.role;
+                    
+                    authControls.innerHTML = `
+                        <div class="user-info">
+                            <span class="username">${username}</span>
+                            <span class="role">${role}</span>
+                        </div>
+                        <button class="btn-auth btn-logout" id="logoutBtn">登出</button>
+                    `;
+                    
+                    document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+                    currentUser = { username, role };
+                } catch (e) {
+                    clearAuthToken();
+                    showLoginButton();
+                }
+            } else {
+                showLoginButton();
+                currentUser = null;
+            }
+        }
+
+        function showLoginButton() {
+            const authControls = document.getElementById('authControls');
+            authControls.innerHTML = `
+                <button class="btn-auth btn-login" id="loginBtn">登录</button>
+            `;
+            document.getElementById('loginBtn').addEventListener('click', openLoginModal);
+        }
+
+        function openLoginModal() {
+            isLoginMode = true;
+            updateModalUI();
+            document.getElementById('loginModal').classList.add('active');
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.remove('active');
+            document.getElementById('authForm').reset();
+        }
+
+        function updateModalUI() {
+            const modalTitle = document.getElementById('modalTitle');
+            const submitBtn = document.getElementById('submitBtn');
+            const switchText = document.getElementById('switchText');
+            const switchLink = document.getElementById('switchLink');
+            const registerRoleGroup = document.getElementById('registerRoleGroup');
+            const registerPhoneGroup = document.getElementById('registerPhoneGroup');
+
+            if (isLoginMode) {
+                modalTitle.textContent = '用户登录';
+                submitBtn.textContent = '登录';
+                switchText.textContent = '还没有账号？';
+                switchLink.textContent = '立即注册';
+                registerRoleGroup.style.display = 'none';
+                registerPhoneGroup.style.display = 'none';
+            } else {
+                modalTitle.textContent = '用户注册';
+                submitBtn.textContent = '注册';
+                switchText.textContent = '已有账号？';
+                switchLink.textContent = '立即登录';
+                registerRoleGroup.style.display = 'block';
+                registerPhoneGroup.style.display = 'block';
+            }
+        }
+
+        function showSuccessToast(message) {
+            toast.classList.add('toast-success');
+            showToast(message);
+            setTimeout(() => {
+                toast.classList.remove('toast-success');
+            }, 3000);
+        }
+
+        async function handleLogin(username, password) {
+            const response = await fetch('/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '登录失败');
+            }
+
+            return await response.json();
+        }
+
+        async function handleRegister(username, password, role, phone) {
+            const body = { username, password, role };
+            if (phone) {
+                body.phone = phone;
+            }
+
+            const response = await fetch('/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || '注册失败');
+            }
+
+            return await response.json();
+        }
+
+        function handleLogout() {
+            clearAuthToken();
+            updateAuthUI();
+            showSuccessToast('已登出');
+            stopAutoRefresh();
+            dashboard.classList.remove('active');
+            emptyState.style.display = 'block';
+            refreshBtn.disabled = true;
+            currentSpotId = null;
+        }
+
         async function fetchTrafficSeries(spotId) {
             const response = await fetch(`/analytics/traffic-series?spot_id=${spotId}`, {
-                headers: {
-                    'X-API-Key': API_KEY
-                }
+                headers: getAuthHeaders()
             });
             
             if (!response.ok) {
                 const errorData = await response.json();
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
                 throw new Error(errorData.detail || '获取流量数据失败');
             }
 
@@ -1257,6 +1638,48 @@
 
         window.addEventListener('beforeunload', () => {
             stopAutoRefresh();
+        });
+
+        document.getElementById('cancelBtn').addEventListener('click', closeLoginModal);
+        document.getElementById('switchLink').addEventListener('click', () => {
+            isLoginMode = !isLoginMode;
+            updateModalUI();
+        });
+
+        document.getElementById('loginModal').addEventListener('click', (e) => {
+            if (e.target.id === 'loginModal') {
+                closeLoginModal();
+            }
+        });
+
+        document.getElementById('authForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const role = document.getElementById('role').value;
+            const phone = document.getElementById('phone').value.trim();
+
+            try {
+                if (isLoginMode) {
+                    const result = await handleLogin(username, password);
+                    setAuthToken(result.access_token);
+                    updateAuthUI();
+                    closeLoginModal();
+                    showSuccessToast('登录成功');
+                } else {
+                    await handleRegister(username, password, role, phone || undefined);
+                    showSuccessToast('注册成功，请登录');
+                    isLoginMode = true;
+                    updateModalUI();
+                }
+            } catch (error) {
+                showToast(error.message);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateAuthUI();
         });
     </script>
 </body>
