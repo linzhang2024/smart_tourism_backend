@@ -24,6 +24,17 @@
 - **日志系统**：结构化日志记录，便于问题排查
 - **API 鉴权**：关键接口 API Key 校验，保障系统安全
 
+**本地运行**
+pip install -r requirements.txt
+python main.py
+
+### 访问地址
+- 主页面（流量监控看板）： http://localhost:8000/
+- API 文档： http://localhost:8000/docs
+- 备选文档： http://localhost:8000/redoc
+  
+### API 鉴权
+
 ## 技术栈
 
 | 技术 | 版本 | 用途 |
