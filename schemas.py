@@ -16,6 +16,12 @@ class OrderStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class ComplaintStatus(str, Enum):
+    PENDING = "待处理"
+    PROCESSING = "处理中"
+    RESOLVED = "已解决"
+
+
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=100, description="用户名")
     password: str = Field(..., min_length=6, description="密码")
@@ -229,3 +235,25 @@ class TicketSuccessBrief(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ComplaintCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200, description="投诉标题")
+    content: str = Field(..., min_length=1, description="投诉内容")
+
+
+class Complaint(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    content: str
+    status: ComplaintStatus
+    reply: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ComplaintWithUser(Complaint):
+    user: Optional[UserResponse] = None

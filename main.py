@@ -971,6 +971,51 @@ def get_traffic_series(
     }
 
 
+@app.post("/complaints", response_model=schemas.Complaint, status_code=status.HTTP_201_CREATED, tags=["投诉咨询"])
+def create_complaint(
+    complaint_data: schemas.ComplaintCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.TOURIST))
+):
+    new_complaint = models.Complaint(
+        user_id=current_user.id,
+        title=complaint_data.title,
+        content=complaint_data.content,
+        status=models.ComplaintStatus.PENDING,
+        created_at=datetime.utcnow()
+    )
+    db.add(new_complaint)
+    db.commit()
+    db.refresh(new_complaint)
+    return new_complaint
+
+
+@app.get("/complaints/my", response_model=List[schemas.Complaint], tags=["投诉咨询"])
+def get_my_complaints(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    complaints = db.query(models.Complaint).filter(
+        models.Complaint.user_id == current_user.id
+    ).order_by(models.Complaint.created_at.desc()).offset(skip).limit(limit).all()
+    return complaints
+
+
+@app.get("/complaints/all", response_model=List[schemas.ComplaintWithUser], tags=["投诉咨询"])
+def get_all_complaints(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.STAFF, models.UserRole.ADMIN))
+):
+    complaints = db.query(models.Complaint).order_by(
+        models.Complaint.created_at.desc()
+    ).offset(skip).limit(limit).all()
+    return complaints
+
+
 if __name__ == "__main__":
     import uvicorn
     
