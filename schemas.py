@@ -242,6 +242,11 @@ class ComplaintCreate(BaseModel):
     content: str = Field(..., min_length=1, description="投诉内容")
 
 
+class ComplaintUpdate(BaseModel):
+    reply: Optional[str] = Field(None, description="回复内容")
+    status: Optional[ComplaintStatus] = Field(None, description="状态")
+
+
 class Complaint(BaseModel):
     id: int
     user_id: int

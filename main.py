@@ -1016,6 +1016,33 @@ def get_all_complaints(
     return complaints
 
 
+@app.patch("/complaints/{complaint_id}", response_model=schemas.Complaint, tags=["投诉咨询"])
+def update_complaint(
+    complaint_id: int,
+    update_data: schemas.ComplaintUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.STAFF, models.UserRole.ADMIN))
+):
+    complaint = db.query(models.Complaint).filter(
+        models.Complaint.id == complaint_id
+    ).first()
+    
+    if complaint is None:
+        raise HTTPException(status_code=404, detail="投诉不存在")
+    
+    update_dict = update_data.model_dump(exclude_unset=True)
+    
+    if "reply" in update_dict:
+        complaint.reply = update_dict["reply"]
+    
+    if "status" in update_dict:
+        complaint.status = update_dict["status"]
+    
+    db.commit()
+    db.refresh(complaint)
+    return complaint
+
+
 if __name__ == "__main__":
     import uvicorn
     

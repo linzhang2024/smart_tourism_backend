@@ -241,6 +241,277 @@
             display: block;
         }
 
+        .complaint-management-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .complaint-management-section.active {
+            display: block;
+        }
+
+        .complaint-table-container {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .complaint-table-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00d2ff, #ff006e, #8b5cf6);
+        }
+
+        .complaint-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .complaint-table-header h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .complaint-table-header h3::before {
+            content: '';
+            width: 5px;
+            height: 28px;
+            background: linear-gradient(180deg, #00d2ff, #ff006e);
+            border-radius: 3px;
+        }
+
+        .btn-refresh-complaints {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #00d2ff, #3a7bd5);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-refresh-complaints:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 210, 255, 0.5);
+        }
+
+        .btn-handle-complaint {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: #ffffff;
+            transition: all 0.3s ease;
+        }
+
+        .btn-handle-complaint:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.5);
+        }
+
+        .status-badge.pending {
+            background: rgba(255, 170, 0, 0.2);
+            color: #ffaa00;
+            border: 1px solid rgba(255, 170, 0, 0.4);
+        }
+
+        .status-badge.processing {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+            border: 1px solid rgba(139, 92, 246, 0.4);
+        }
+
+        .status-badge.resolved {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid rgba(0, 255, 136, 0.4);
+        }
+
+        .handle-modal .modal {
+            max-width: 600px;
+        }
+
+        .handle-modal .complaint-info {
+            background: rgba(10, 10, 26, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .handle-modal .complaint-info-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .handle-modal .complaint-info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .handle-modal .complaint-info-label {
+            width: 80px;
+            color: rgba(255, 255, 255, 0.5);
+            flex-shrink: 0;
+        }
+
+        .handle-modal .complaint-info-value {
+            color: rgba(255, 255, 255, 0.9);
+            flex: 1;
+        }
+
+        .handle-modal .complaint-content {
+            max-height: 100px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .handle-modal .form-group textarea {
+            min-height: 100px;
+        }
+
+        .tab-container {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .tab-button {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .tab-button.active {
+            color: #00d2ff;
+        }
+
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #00d2ff, #8b5cf6);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .my-complaints-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .complaint-item {
+            background: rgba(10, 10, 26, 0.5);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .complaint-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .complaint-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .complaint-item-title {
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1rem;
+        }
+
+        .complaint-item-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .complaint-item-content {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+
+        .complaint-item-reply {
+            background: rgba(0, 210, 255, 0.1);
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 3px solid #00d2ff;
+        }
+
+        .complaint-item-reply-label {
+            font-size: 0.8rem;
+            color: #00d2ff;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .complaint-item-reply-content {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+        }
+
+        .empty-complaints {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .empty-complaints .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+        }
+
         .user-table-container {
             background: var(--card-bg);
             border-radius: 15px;
@@ -1397,6 +1668,32 @@
                 </table>
             </div>
         </div>
+
+        <div class="complaint-management-section" id="complaintManagementSection">
+            <div class="complaint-table-container">
+                <div class="complaint-table-header">
+                    <h3>投诉建议管理</h3>
+                    <button class="btn-refresh-complaints" id="refreshComplaintsBtn">
+                        <span class="refresh-icon">🔄</span>
+                        刷新列表
+                    </button>
+                </div>
+                <table class="records-table user-table" id="complaintsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>标题</th>
+                            <th>状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="complaintsTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <button class="feedback-fab" id="feedbackBtn">
@@ -1407,19 +1704,80 @@
     <div class="modal-overlay feedback-modal" id="feedbackModal">
         <div class="modal">
             <h2 class="modal-title">意见反馈</h2>
-            <form id="feedbackForm">
+            <div class="tab-container">
+                <button type="button" class="tab-button active" data-tab="submit">提交新反馈</button>
+                <button type="button" class="tab-button" data-tab="history">我的历史反馈</button>
+            </div>
+            <div class="tab-content active" id="tab-submit">
+                <form id="feedbackForm">
+                    <div class="form-group">
+                        <label for="feedbackTitle">标题</label>
+                        <input type="text" id="feedbackTitle" name="title" placeholder="请输入反馈标题（最多200字）" required maxlength="200">
+                        <div class="char-count" id="titleCharCount">0/200</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="feedbackContent">内容</label>
+                        <textarea id="feedbackContent" name="content" placeholder="请详细描述您的意见或建议..." required></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancelFeedbackBtn">取消</button>
+                        <button type="submit" class="btn btn-primary" id="submitFeedbackBtn">提交</button>
+                    </div>
+                </form>
+            </div>
+            <div class="tab-content" id="tab-history">
+                <div class="my-complaints-list" id="myComplaintsList">
+                    <div class="empty-complaints">
+                        <div class="icon">📝</div>
+                        <p>暂无历史反馈记录</p>
+                    </div>
+                </div>
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-cancel" id="closeHistoryBtn">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay handle-modal" id="handleComplaintModal">
+        <div class="modal">
+            <h2 class="modal-title">处理投诉</h2>
+            <div class="complaint-info" id="handleComplaintInfo">
+                <div class="complaint-info-row">
+                    <span class="complaint-info-label">标题：</span>
+                    <span class="complaint-info-value" id="handleComplaintTitle">-</span>
+                </div>
+                <div class="complaint-info-row">
+                    <span class="complaint-info-label">用户：</span>
+                    <span class="complaint-info-value" id="handleComplaintUser">-</span>
+                </div>
+                <div class="complaint-info-row">
+                    <span class="complaint-info-label">状态：</span>
+                    <span class="complaint-info-value" id="handleComplaintStatus">-</span>
+                </div>
+                <div class="complaint-info-row">
+                    <span class="complaint-info-label">内容：</span>
+                </div>
+                <div class="complaint-info-row">
+                    <span class="complaint-content" id="handleComplaintContent">-</span>
+                </div>
+            </div>
+            <form id="handleComplaintForm">
                 <div class="form-group">
-                    <label for="feedbackTitle">标题</label>
-                    <input type="text" id="feedbackTitle" name="title" placeholder="请输入反馈标题（最多200字）" required maxlength="200">
-                    <div class="char-count" id="titleCharCount">0/200</div>
+                    <label for="handleStatus">状态</label>
+                    <select id="handleStatus" name="status">
+                        <option value="待处理">待处理</option>
+                        <option value="处理中">处理中</option>
+                        <option value="已解决">已解决</option>
+                    </select>
                 </div>
                 <div class="form-group">
-                    <label for="feedbackContent">内容</label>
-                    <textarea id="feedbackContent" name="content" placeholder="请详细描述您的意见或建议..." required></textarea>
+                    <label for="handleReply">回复内容</label>
+                    <textarea id="handleReply" name="reply" placeholder="请输入回复内容..."></textarea>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-cancel" id="cancelFeedbackBtn">取消</button>
-                    <button type="submit" class="btn btn-primary" id="submitFeedbackBtn">提交</button>
+                    <button type="button" class="btn btn-cancel" id="cancelHandleBtn">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitHandleBtn">确认处理</button>
                 </div>
             </form>
         </div>
@@ -2374,6 +2732,318 @@
                 submitBtn.disabled = false;
             }
         });
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.tab === tabName) {
+                    btn.classList.add('active');
+                }
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+
+            if (tabName === 'history') {
+                loadMyComplaints();
+            }
+        }
+
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                switchTab(btn.dataset.tab);
+            });
+        });
+
+        async function fetchMyComplaints() {
+            const response = await fetch('/complaints/my', {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function fetchAllComplaints() {
+            const response = await fetch('/complaints/all', {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function updateComplaintApi(complaintId, data) {
+            const response = await fetch(`/complaints/${complaintId}`, {
+                method: 'PATCH',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case '待处理': return 'pending';
+                case '处理中': return 'processing';
+                case '已解决': return 'resolved';
+                default: return 'pending';
+            }
+        }
+
+        function renderMyComplaintsList(complaints) {
+            const container = document.getElementById('myComplaintsList');
+            
+            if (!complaints || complaints.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-complaints">
+                        <div class="icon">📝</div>
+                        <p>暂无历史反馈记录</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            complaints.forEach(complaint => {
+                const statusClass = getStatusBadgeClass(complaint.status);
+                html += `
+                    <div class="complaint-item">
+                        <div class="complaint-item-header">
+                            <span class="complaint-item-title">${complaint.title}</span>
+                            <span class="status-badge ${statusClass}">${complaint.status}</span>
+                        </div>
+                        <div class="complaint-item-meta">
+                            <span>${new Date(complaint.created_at).toLocaleString('zh-CN')}</span>
+                        </div>
+                        <div class="complaint-item-content">${complaint.content}</div>
+                        ${complaint.reply ? `
+                        <div class="complaint-item-reply">
+                            <div class="complaint-item-reply-label">管理员回复</div>
+                            <div class="complaint-item-reply-content">${complaint.reply}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        async function loadMyComplaints() {
+            try {
+                const complaints = await fetchMyComplaints();
+                renderMyComplaintsList(complaints);
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        function renderComplaintsTable(complaints) {
+            const tbody = document.getElementById('complaintsTableBody');
+            
+            if (!complaints || complaints.length === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td colspan="6" style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 30px;">
+                        暂无投诉数据
+                    </td>
+                `;
+                tbody.innerHTML = '';
+                tbody.appendChild(tr);
+                return;
+            }
+
+            tbody.innerHTML = '';
+            complaints.forEach(complaint => {
+                const username = complaint.user ? complaint.user.username : '未知用户';
+                const statusClass = getStatusBadgeClass(complaint.status);
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${complaint.id}</td>
+                    <td>${username}</td>
+                    <td>${complaint.title}</td>
+                    <td><span class="status-badge ${statusClass}">${complaint.status}</span></td>
+                    <td>${new Date(complaint.created_at).toLocaleString('zh-CN')}</td>
+                    <td class="action-cell">
+                        <button class="btn-handle-complaint" data-complaint-id="${complaint.id}">
+                            处理
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.querySelectorAll('.btn-handle-complaint').forEach(btn => {
+                btn.addEventListener('click', openHandleComplaintModal);
+            });
+        }
+
+        async function loadComplaints() {
+            try {
+                const complaints = await fetchAllComplaints();
+                renderComplaintsTable(complaints);
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        let currentHandleComplaint = null;
+
+        async function openHandleComplaintModal(e) {
+            const complaintId = parseInt(e.target.dataset.complaintId);
+            
+            try {
+                const complaints = await fetchAllComplaints();
+                const complaint = complaints.find(c => c.id === complaintId);
+                
+                if (!complaint) {
+                    showToast('投诉不存在');
+                    return;
+                }
+
+                currentHandleComplaint = complaint;
+                const username = complaint.user ? complaint.user.username : '未知用户';
+
+                document.getElementById('handleComplaintTitle').textContent = complaint.title;
+                document.getElementById('handleComplaintUser').textContent = username;
+                document.getElementById('handleComplaintStatus').textContent = complaint.status;
+                document.getElementById('handleComplaintContent').textContent = complaint.content;
+
+                const statusSelect = document.getElementById('handleStatus');
+                statusSelect.value = complaint.status;
+
+                document.getElementById('handleReply').value = complaint.reply || '';
+
+                document.getElementById('handleComplaintModal').classList.add('active');
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        function closeHandleComplaintModal() {
+            document.getElementById('handleComplaintModal').classList.remove('active');
+            currentHandleComplaint = null;
+        }
+
+        document.getElementById('cancelHandleBtn').addEventListener('click', closeHandleComplaintModal);
+
+        document.getElementById('handleComplaintModal').addEventListener('click', (e) => {
+            if (e.target.id === 'handleComplaintModal') {
+                closeHandleComplaintModal();
+            }
+        });
+
+        document.getElementById('handleComplaintForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!currentHandleComplaint) {
+                showToast('请先选择要处理的投诉');
+                return;
+            }
+
+            const status = document.getElementById('handleStatus').value;
+            const reply = document.getElementById('handleReply').value.trim();
+
+            try {
+                const submitBtn = document.getElementById('submitHandleBtn');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = '处理中...';
+                submitBtn.disabled = true;
+
+                const updateData = {};
+                if (status !== currentHandleComplaint.status) {
+                    updateData.status = status;
+                }
+                if (reply !== (currentHandleComplaint.reply || '')) {
+                    updateData.reply = reply;
+                }
+
+                if (Object.keys(updateData).length > 0) {
+                    await updateComplaintApi(currentHandleComplaint.id, updateData);
+                }
+
+                closeHandleComplaintModal();
+                showSuccessToast('处理成功');
+                await loadComplaints();
+
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            } catch (error) {
+                showToast(error.message || '处理失败，请稍后重试');
+                const submitBtn = document.getElementById('submitHandleBtn');
+                submitBtn.textContent = '确认处理';
+                submitBtn.disabled = false;
+            }
+        });
+
+        document.getElementById('refreshComplaintsBtn').addEventListener('click', () => {
+            loadComplaints();
+        });
+
+        document.getElementById('closeHistoryBtn').addEventListener('click', closeFeedbackModal);
+
+        const originalUpdateAuthUI = updateAuthUI;
+        updateAuthUI = function() {
+            originalUpdateAuthUI();
+            
+            const complaintManagementSection = document.getElementById('complaintManagementSection');
+            const token = getAuthToken();
+            
+            if (token) {
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const role = payload.role;
+                    
+                    if (role === 'ADMIN' || role === 'STAFF') {
+                        complaintManagementSection.classList.add('active');
+                        loadComplaints();
+                    } else {
+                        complaintManagementSection.classList.remove('active');
+                    }
+                } catch (e) {
+                    complaintManagementSection.classList.remove('active');
+                }
+            } else {
+                complaintManagementSection.classList.remove('active');
+            }
+        };
 
         document.addEventListener('DOMContentLoaded', () => {
             updateAuthUI();
