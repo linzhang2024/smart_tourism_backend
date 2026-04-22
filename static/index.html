@@ -1096,6 +1096,92 @@
             opacity: 0.9;
         }
 
+        .feedback-fab {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff006e, #8b5cf6);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            overflow: visible;
+        }
+
+        .feedback-fab:hover {
+            transform: scale(1.1);
+            box-shadow: 0 12px 40px rgba(139, 92, 246, 0.7);
+        }
+
+        .feedback-fab .fab-icon {
+            font-size: 24px;
+            color: #ffffff;
+        }
+
+        .feedback-fab .fab-tooltip {
+            position: absolute;
+            right: 70px;
+            background: rgba(10, 10, 26, 0.95);
+            color: #ffffff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            opacity: 0;
+            transform: translateX(10px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .feedback-fab:hover .fab-tooltip {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .feedback-modal .modal {
+            max-width: 500px;
+        }
+
+        .feedback-modal .form-group textarea {
+            width: 100%;
+            padding: 14px 18px;
+            font-size: 1rem;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            border-radius: 12px;
+            background: rgba(10, 10, 26, 0.8);
+            color: #ffffff;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+        }
+
+        .feedback-modal .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.3);
+        }
+
+        .feedback-modal .form-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .char-count {
+            text-align: right;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 5px;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 1.8rem;
@@ -1310,6 +1396,32 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+
+    <button class="feedback-fab" id="feedbackBtn">
+        <span class="fab-icon">💬</span>
+        <span class="fab-tooltip">意见反馈</span>
+    </button>
+
+    <div class="modal-overlay feedback-modal" id="feedbackModal">
+        <div class="modal">
+            <h2 class="modal-title">意见反馈</h2>
+            <form id="feedbackForm">
+                <div class="form-group">
+                    <label for="feedbackTitle">标题</label>
+                    <input type="text" id="feedbackTitle" name="title" placeholder="请输入反馈标题（最多200字）" required maxlength="200">
+                    <div class="char-count" id="titleCharCount">0/200</div>
+                </div>
+                <div class="form-group">
+                    <label for="feedbackContent">内容</label>
+                    <textarea id="feedbackContent" name="content" placeholder="请详细描述您的意见或建议..." required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-cancel" id="cancelFeedbackBtn">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitFeedbackBtn">提交</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -2168,6 +2280,99 @@
 
         document.getElementById('refreshUsersBtn').addEventListener('click', () => {
             loadUsers();
+        });
+
+        function openFeedbackModal() {
+            const token = getAuthToken();
+            if (!token) {
+                showToast('请先登录后再提交建议');
+                openLoginModal();
+                return;
+            }
+            document.getElementById('feedbackModal').classList.add('active');
+            document.getElementById('feedbackTitle').value = '';
+            document.getElementById('feedbackContent').value = '';
+            updateTitleCharCount();
+        }
+
+        function closeFeedbackModal() {
+            document.getElementById('feedbackModal').classList.remove('active');
+        }
+
+        function updateTitleCharCount() {
+            const titleInput = document.getElementById('feedbackTitle');
+            const charCount = document.getElementById('titleCharCount');
+            charCount.textContent = `${titleInput.value.length}/200`;
+        }
+
+        async function submitComplaint(title, content) {
+            const response = await fetch('/complaints', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ title, content })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                if (response.status === 403) {
+                    throw new Error('您的角色不支持提交反馈，请使用游客账号登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        document.getElementById('feedbackBtn').addEventListener('click', openFeedbackModal);
+
+        document.getElementById('cancelFeedbackBtn').addEventListener('click', closeFeedbackModal);
+
+        document.getElementById('feedbackTitle').addEventListener('input', updateTitleCharCount);
+
+        document.getElementById('feedbackModal').addEventListener('click', (e) => {
+            if (e.target.id === 'feedbackModal') {
+                closeFeedbackModal();
+            }
+        });
+
+        document.getElementById('feedbackForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const title = document.getElementById('feedbackTitle').value.trim();
+            const content = document.getElementById('feedbackContent').value.trim();
+
+            if (!title || !content) {
+                showToast('请填写完整的标题和内容');
+                return;
+            }
+
+            try {
+                const submitBtn = document.getElementById('submitFeedbackBtn');
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = '提交中...';
+                submitBtn.disabled = true;
+
+                await submitComplaint(title, content);
+                
+                closeFeedbackModal();
+                showSuccessToast('感谢反馈，我们会尽快处理');
+                
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            } catch (error) {
+                showToast(error.message || '提交失败，请稍后重试');
+                const submitBtn = document.getElementById('submitFeedbackBtn');
+                submitBtn.textContent = '提交';
+                submitBtn.disabled = false;
+            }
         });
 
         document.addEventListener('DOMContentLoaded', () => {

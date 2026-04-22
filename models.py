@@ -25,6 +25,12 @@ class OrderStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class ComplaintStatus(str, Enum):
+    PENDING = "待处理"
+    PROCESSING = "处理中"
+    RESOLVED = "已解决"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -108,3 +114,17 @@ class TouristFlow(Base):
     record_time = Column(DateTime, default=get_utc8_now)
 
     scenic_spot = relationship("ScenicSpot")
+
+
+class Complaint(Base):
+    __tablename__ = "complaints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=False)
+    status = Column(SQLEnum(ComplaintStatus), default=ComplaintStatus.PENDING, nullable=False)
+    reply = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
