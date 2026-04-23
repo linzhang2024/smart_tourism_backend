@@ -83,6 +83,51 @@
             color: #00d2ff;
         }
 
+        .user-info .member-level {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .user-info .member-level.normal {
+            background: rgba(255, 255, 255, 0.1);
+            color: #9ca3af;
+        }
+
+        .user-info .member-level.silver {
+            background: rgba(192, 192, 192, 0.2);
+            color: #c0c0c0;
+        }
+
+        .user-info .member-level.gold {
+            background: rgba(255, 215, 0, 0.2);
+            color: #ffd700;
+        }
+
+        .user-info .points-badge {
+            font-size: 0.85rem;
+            padding: 2px 10px;
+            border-radius: 10px;
+            background: rgba(0, 255, 136, 0.15);
+            color: #00ff88;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .user-info .points-link {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 8px;
+            background: rgba(139, 92, 246, 0.2);
+            color: #a78bfa;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-info .points-link:hover {
+            background: rgba(139, 92, 246, 0.3);
+            color: #c4b5fd;
+        }
+
         .btn-auth {
             padding: 10px 20px;
             font-size: 0.9rem;
@@ -1739,6 +1784,40 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="pointsModal">
+        <div class="modal" style="max-width: 600px;">
+            <h2 class="modal-title">积分明细</h2>
+            <div class="points-summary" style="margin-bottom: 20px; padding: 15px; background: rgba(139, 92, 246, 0.1); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.3);">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="color: rgba(255, 255, 255, 0.6); font-size: 0.9rem;">当前积分余额：</span>
+                        <span id="pointsModalTotal" style="font-size: 1.5rem; font-weight: 700; color: #00ff88; margin-left: 10px;">0</span>
+                    </div>
+                    <div>
+                        <span style="color: rgba(255, 255, 255, 0.6); font-size: 0.9rem;">会员等级：</span>
+                        <span id="pointsModalLevel" style="font-size: 0.95rem; font-weight: 600; margin-left: 10px;">普通</span>
+                    </div>
+                </div>
+            </div>
+            <div class="points-logs-container" style="max-height: 300px; overflow-y: auto;">
+                <table class="records-table" id="pointsLogsTable">
+                    <thead>
+                        <tr>
+                            <th>变动时间</th>
+                            <th>变动积分</th>
+                            <th>变动原因</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pointsLogsBody">
+                    </tbody>
+                </table>
+            </div>
+            <div class="form-actions" style="margin-top: 20px;">
+                <button type="button" class="btn btn-cancel" id="closePointsModalBtn">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <div class="modal-overlay handle-modal" id="handleComplaintModal">
         <div class="modal">
             <h2 class="modal-title">处理投诉</h2>
@@ -2067,7 +2146,7 @@
             return headers;
         }
 
-        function updateAuthUI() {
+        async function updateAuthUI() {
             const authControls = document.getElementById('authControls');
             const welcomeText = document.getElementById('welcomeText');
             const welcomeUsername = document.getElementById('welcomeUsername');
@@ -2081,10 +2160,24 @@
                     const username = payload.sub;
                     const role = payload.role;
                     
+                    let memberProfile = null;
+                    try {
+                        memberProfile = await fetchMemberProfile();
+                    } catch (e) {
+                        console.error('获取会员信息失败:', e);
+                    }
+                    
+                    const totalPoints = memberProfile ? memberProfile.total_points : 0;
+                    const memberLevel = memberProfile ? memberProfile.member_level : '普通';
+                    const levelClass = getMemberLevelClass(memberLevel);
+                    
                     authControls.innerHTML = `
                         <div class="user-info">
                             <span class="username">${username}</span>
                             <span class="role">${role}</span>
+                            <span class="member-level ${levelClass}">${memberLevel}</span>
+                            <span class="points-badge">${totalPoints} 积分</span>
+                            <span class="points-link" id="viewPointsLink">📋 明细</span>
                         </div>
                         <button class="btn-auth btn-logout" id="logoutBtn">登出</button>
                     `;
@@ -2103,8 +2196,15 @@
                     }
                     
                     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+                    
+                    const viewPointsLink = document.getElementById('viewPointsLink');
+                    if (viewPointsLink) {
+                        viewPointsLink.addEventListener('click', openPointsModal);
+                    }
+                    
                     currentUser = { username, role };
                 } catch (e) {
+                    console.error('updateAuthUI error:', e);
                     clearAuthToken();
                     showLoginButton();
                 }
@@ -2450,6 +2550,79 @@
         });
 
         let currentUserId = null;
+        let currentMemberProfile = null;
+
+        async function fetchMemberProfile() {
+            const response = await fetch('/member/profile', {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    return null;
+                }
+                throw new Error('获取会员信息失败');
+            }
+
+            return await response.json();
+        }
+
+        function getMemberLevelClass(level) {
+            switch (level) {
+                case '黄金': return 'gold';
+                case '白银': return 'silver';
+                default: return 'normal';
+            }
+        }
+
+        function renderPointsLogs(logs) {
+            const tbody = document.getElementById('pointsLogsBody');
+            
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: rgba(255, 255, 255, 0.5); padding: 30px;">
+                            暂无积分变动记录
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = '';
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                const pointsClass = log.points_change > 0 ? 'color: #00ff88;' : 'color: #ff4444;';
+                const pointsText = log.points_change > 0 ? `+${log.points_change}` : log.points_change;
+                tr.innerHTML = `
+                    <td>${new Date(log.created_at).toLocaleString('zh-CN')}</td>
+                    <td style="${pointsClass} font-weight: 600;">${pointsText}</td>
+                    <td>${log.reason}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function openPointsModal() {
+            try {
+                const profile = await fetchMemberProfile();
+                if (profile) {
+                    currentMemberProfile = profile;
+                    document.getElementById('pointsModalTotal').textContent = profile.total_points;
+                    document.getElementById('pointsModalLevel').textContent = profile.member_level;
+                    renderPointsLogs(profile.recent_logs);
+                    document.getElementById('pointsModal').classList.add('active');
+                }
+            } catch (error) {
+                showToast(error.message || '获取积分明细失败');
+            }
+        }
+
+        function closePointsModal() {
+            document.getElementById('pointsModal').classList.remove('active');
+        }
 
         async function getCurrentUserInfo() {
             try {
@@ -3018,6 +3191,14 @@
         });
 
         document.getElementById('closeHistoryBtn').addEventListener('click', closeFeedbackModal);
+
+        document.getElementById('closePointsModalBtn').addEventListener('click', closePointsModal);
+
+        document.getElementById('pointsModal').addEventListener('click', (e) => {
+            if (e.target.id === 'pointsModal') {
+                closePointsModal();
+            }
+        });
 
         const originalUpdateAuthUI = updateAuthUI;
         updateAuthUI = function() {

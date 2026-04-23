@@ -150,6 +150,8 @@ def login_user(db: Session, login_data: schemas.UserLogin) -> schemas.Token:
         role=user.role,
         phone=user.phone,
         is_active=user.is_active,
+        total_points=user.total_points,
+        member_level=user.member_level,
         created_at=user.created_at
     )
     
