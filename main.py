@@ -243,14 +243,58 @@ def migrate_database():
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id INTEGER NOT NULL,
                         coupon_id INTEGER NOT NULL,
+                        redemption_code VARCHAR(20) UNIQUE NOT NULL,
                         is_used BOOLEAN DEFAULT 0,
                         obtained_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        expires_at DATETIME,
                         used_at DATETIME,
+                        used_order_id INTEGER,
                         FOREIGN KEY (user_id) REFERENCES users (id),
-                        FOREIGN KEY (coupon_id) REFERENCES coupons (id)
+                        FOREIGN KEY (coupon_id) REFERENCES coupons (id),
+                        FOREIGN KEY (used_order_id) REFERENCES ticket_orders (id)
                     )
                 """))
                 print("[迁移] 完成!")
+            else:
+                result = conn.execute(text("PRAGMA table_info(user_coupons)"))
+                columns = [row[1] for row in result]
+                
+                if 'redemption_code' not in columns:
+                    print("[迁移] 添加 redemption_code 列到 user_coupons 表...")
+                    try:
+                        conn.execute(text("ALTER TABLE user_coupons ADD COLUMN redemption_code VARCHAR(20)"))
+                        print("[迁移] 完成!")
+                        
+                        print("[迁移] 创建 redemption_code 唯一索引...")
+                        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_user_coupons_redemption_code ON user_coupons(redemption_code)"))
+                        print("[迁移] 完成!")
+                    except Exception as e:
+                        print(f"[迁移] 警告: {e}")
+                
+                if 'expires_at' not in columns:
+                    print("[迁移] 添加 expires_at 列到 user_coupons 表...")
+                    conn.execute(text("ALTER TABLE user_coupons ADD COLUMN expires_at DATETIME"))
+                    print("[迁移] 完成!")
+                
+                if 'used_order_id' not in columns:
+                    print("[迁移] 添加 used_order_id 列到 user_coupons 表...")
+                    conn.execute(text("ALTER TABLE user_coupons ADD COLUMN used_order_id INTEGER"))
+                    print("[迁移] 完成!")
+            
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='point_logs'"))
+            if result.fetchone():
+                result = conn.execute(text("PRAGMA table_info(point_logs)"))
+                columns = [row[1] for row in result]
+                
+                if 'expires_at' not in columns:
+                    print("[迁移] 添加 expires_at 列到 point_logs 表...")
+                    conn.execute(text("ALTER TABLE point_logs ADD COLUMN expires_at DATETIME"))
+                    print("[迁移] 完成!")
+                
+                if 'is_expired' not in columns:
+                    print("[迁移] 添加 is_expired 列到 point_logs 表...")
+                    conn.execute(text("ALTER TABLE point_logs ADD COLUMN is_expired BOOLEAN DEFAULT 0"))
+                    print("[迁移] 完成!")
             
             conn.commit()
         except Exception as e:
@@ -698,13 +742,16 @@ def purchase_ticket(
     failed_order: Optional[models.TicketOrder] = None
     scenic_spot: Optional[models.ScenicSpot] = None
     user: Optional[models.User] = None
+    user_coupon: Optional[models.UserCoupon] = None
+    coupon_value: int = 0
     
     log_info(
         message="开始处理购票请求",
         action="PURCHASE_REQUEST",
         tourist_id=order_data.user_id,
         scenic_spot_id=order_data.scenic_spot_id,
-        quantity=order_data.quantity
+        quantity=order_data.quantity,
+        user_coupon_id=order_data.user_coupon_id
     )
     
     try:
@@ -733,6 +780,62 @@ def purchase_ticket(
                 scenic_spot_id=order_data.scenic_spot_id
             )
             raise HTTPException(status_code=404, detail="用户不存在")
+        
+        if order_data.user_coupon_id is not None:
+            user_coupon = db.query(models.UserCoupon).filter(
+                models.UserCoupon.id == order_data.user_coupon_id
+            ).first()
+            
+            if user_coupon is None:
+                log_error(
+                    message=f"优惠券不存在: {order_data.user_coupon_id}",
+                    action="COUPON_NOT_FOUND",
+                    tourist_id=order_data.user_id
+                )
+                raise HTTPException(status_code=404, detail="优惠券不存在")
+            
+            if user_coupon.user_id != user.id:
+                log_error(
+                    message=f"优惠券不属于当前用户: coupon_id={user_coupon.id}, user_id={user_coupon.user_id}, current_user={user.id}",
+                    action="COUPON_OWNERSHIP_ERROR",
+                    tourist_id=order_data.user_id
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="优惠券不属于当前用户"
+                )
+            
+            if user_coupon.is_used:
+                log_error(
+                    message=f"优惠券已使用: coupon_id={user_coupon.id}, redemption_code={user_coupon.redemption_code}",
+                    action="COUPON_ALREADY_USED",
+                    tourist_id=order_data.user_id
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="优惠券已使用"
+                )
+            
+            now = datetime.utcnow()
+            if user_coupon.expires_at and user_coupon.expires_at < now:
+                log_error(
+                    message=f"优惠券已过期: coupon_id={user_coupon.id}, expires_at={user_coupon.expires_at}",
+                    action="COUPON_EXPIRED",
+                    tourist_id=order_data.user_id
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="优惠券已过期"
+                )
+            
+            db.refresh(user_coupon, ['coupon'])
+            coupon_value = user_coupon.coupon.face_value if user_coupon.coupon else 0
+            
+            log_info(
+                message=f"优惠券验证通过: coupon_id={user_coupon.id}, redemption_code={user_coupon.redemption_code}, 面值={coupon_value} 元",
+                action="COUPON_VALIDATED",
+                tourist_id=order_data.user_id
+            )
         
         scenic_spot = db.query(models.ScenicSpot).filter(
             models.ScenicSpot.id == order_data.scenic_spot_id
@@ -822,6 +925,18 @@ def purchase_ticket(
         
         total_price = discounted_price
         
+        coupon_discount = 0
+        if user_coupon and coupon_value > 0:
+            coupon_discount = min(coupon_value, total_price)
+            total_price = max(0, total_price - coupon_discount)
+            
+            log_info(
+                message=f"优惠券抵扣: 面值={coupon_value} 元, 实际抵扣={coupon_discount} 元, 最终价格={total_price} 元",
+                action="COUPON_APPLIED",
+                tourist_id=order_data.user_id,
+                redemption_code=user_coupon.redemption_code
+            )
+        
         order = models.TicketOrder(
             user_id=order_data.user_id,
             scenic_spot_id=order_data.scenic_spot_id,
@@ -833,6 +948,19 @@ def purchase_ticket(
         )
         db.add(order)
         db.flush()
+        
+        if user_coupon:
+            user_coupon.is_used = True
+            user_coupon.used_at = datetime.utcnow()
+            user_coupon.used_order_id = order.id
+            
+            log_info(
+                message=f"优惠券已核销: redemption_code={user_coupon.redemption_code}, 订单号={order.order_no}",
+                action="COUPON_REDEEMED",
+                tourist_id=order_data.user_id,
+                order_id=order.order_no,
+                redemption_code=user_coupon.redemption_code
+            )
         
         log_info(
             message=f"订单创建成功，订单号: {order.order_no}",
@@ -866,10 +994,13 @@ def purchase_ticket(
         db.refresh(order)
         db.refresh(user)
         
+        if user_coupon:
+            db.refresh(user_coupon)
+        
         invalidate_scenic_spot_cache(order_data.scenic_spot_id)
         
         log_info(
-            message=f"支付成功，订单号: {order.order_no}, 支付时间: {order.paid_at}, 原价: {original_total_price}, 实付: {total_price}, 会员折扣减免: {discount_amount}",
+            message=f"支付成功，订单号: {order.order_no}, 支付时间: {order.paid_at}, 原价: {original_total_price}, 会员折扣减免: {discount_amount}, 优惠券抵扣: {coupon_discount}, 实付: {total_price}",
             action="PAYMENT_SUCCESS",
             order_id=order.order_no,
             scenic_spot_id=order_data.scenic_spot_id
@@ -1088,8 +1219,28 @@ def create_complaint(
         created_at=datetime.utcnow()
     )
     db.add(new_complaint)
+    
+    points_earned = 50
+    current_user.total_points += points_earned
+    
+    point_log = models.PointLog(
+        user_id=current_user.id,
+        points_change=points_earned,
+        reason=f"投诉反馈获得积分"
+    )
+    db.add(point_log)
+    
+    update_member_level(current_user)
+    
+    log_info(
+        message=f"用户 [{current_user.id}] 提交投诉反馈，获得 {points_earned} 积分",
+        action="COMPLAINT_POINTS_EARNED",
+        tourist_id=current_user.id
+    )
+    
     db.commit()
     db.refresh(new_complaint)
+    db.refresh(current_user)
     return new_complaint
 
 
@@ -1151,17 +1302,42 @@ def get_member_profile(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_active_user)
 ):
+    from datetime import timedelta
+    
     recent_logs = db.query(models.PointLog).filter(
         models.PointLog.user_id == current_user.id
     ).order_by(
         models.PointLog.created_at.desc()
     ).limit(5).all()
     
+    now = datetime.utcnow()
+    threshold_30d = now + timedelta(days=30)
+    threshold_7d = now + timedelta(days=7)
+    
+    expiring_logs_30d = db.query(models.PointLog).filter(
+        models.PointLog.user_id == current_user.id,
+        models.PointLog.points_change > 0,
+        models.PointLog.is_expired == False,
+        models.PointLog.expires_at <= threshold_30d
+    ).all()
+    
+    expiring_logs_7d = db.query(models.PointLog).filter(
+        models.PointLog.user_id == current_user.id,
+        models.PointLog.points_change > 0,
+        models.PointLog.is_expired == False,
+        models.PointLog.expires_at <= threshold_7d
+    ).all()
+    
+    expiring_points_30d = sum(log.points_change for log in expiring_logs_30d)
+    expiring_points_7d = sum(log.points_change for log in expiring_logs_7d)
+    
     return schemas.MemberProfileResponse(
         user_id=current_user.id,
         username=current_user.username,
         member_level=current_user.member_level,
         total_points=current_user.total_points,
+        expiring_points_30d=expiring_points_30d,
+        expiring_points_7d=expiring_points_7d,
         recent_logs=recent_logs
     )
 

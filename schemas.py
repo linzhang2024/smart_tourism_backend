@@ -278,6 +278,8 @@ class PointLog(BaseModel):
     points_change: int
     reason: str
     created_at: datetime
+    expires_at: Optional[datetime] = None
+    is_expired: bool = False
 
     class Config:
         from_attributes = True
@@ -288,6 +290,8 @@ class MemberProfileResponse(BaseModel):
     username: str
     member_level: MemberLevel
     total_points: int
+    expiring_points_30d: int = 0
+    expiring_points_7d: int = 0
     recent_logs: List[PointLog]
 
     class Config:
@@ -317,9 +321,12 @@ class UserCoupon(BaseModel):
     id: int
     user_id: int
     coupon_id: int
+    redemption_code: str
     is_used: bool
     obtained_at: datetime
+    expires_at: Optional[datetime] = None
     used_at: Optional[datetime] = None
+    used_order_id: Optional[int] = None
     coupon: Optional[Coupon] = None
 
     class Config:
@@ -335,3 +342,10 @@ class ExchangeResponse(BaseModel):
     message: str
     user_coupon: Optional[UserCoupon] = None
     remaining_points: int = 0
+
+
+class TicketOrderCreate(BaseModel):
+    user_id: int = Field(..., description="用户ID")
+    scenic_spot_id: int = Field(..., description="景点ID")
+    quantity: int = Field(1, ge=1, description="门票数量")
+    user_coupon_id: Optional[int] = Field(None, description="用户优惠券ID（使用优惠券时提供）")
