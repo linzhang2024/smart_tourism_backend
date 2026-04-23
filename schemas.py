@@ -350,3 +350,34 @@ class TicketOrderCreate(BaseModel):
     scenic_spot_id: int = Field(..., description="景点ID")
     quantity: int = Field(1, ge=1, description="门票数量")
     user_coupon_id: Optional[int] = Field(None, description="用户优惠券ID（使用优惠券时提供）")
+
+
+class DistributorCreate(BaseModel):
+    user_id: int = Field(..., description="用户ID")
+    commission_rate: Optional[float] = Field(0.05, ge=0, le=1, description="佣金比例（默认5%）")
+
+
+class DistributorUpdate(BaseModel):
+    commission_rate: Optional[float] = Field(None, ge=0, le=1, description="佣金比例")
+    is_active: Optional[bool] = Field(None, description="是否激活")
+
+
+class Distributor(BaseModel):
+    id: int
+    user_id: int
+    distributor_code: str
+    commission_rate: float
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DistributorWithDetails(Distributor):
+    user: Optional[UserResponse] = None
+
+
+class TicketOrderWithDistributor(TicketOrder):
+    distributor_id: Optional[int] = None
+    distributor_code: Optional[str] = None
