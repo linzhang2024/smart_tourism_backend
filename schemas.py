@@ -650,3 +650,47 @@ class ScenicSpotWithGeofence(ScenicSpotBase):
 
     class Config:
         from_attributes = True
+
+
+class TransactionType(str, Enum):
+    INCOME = "收入"
+    DISTRIBUTION_EXPENSE = "分销支出"
+    REFUND = "退款"
+
+
+class FinancialLog(BaseModel):
+    id: int
+    transaction_type: TransactionType
+    order_no: Optional[str] = None
+    amount: float
+    transaction_time: datetime
+    summary: Optional[str] = None
+    related_distributor_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FinancialLogWithDetails(FinancialLog):
+    distributor: Optional[Distributor] = None
+
+
+class FinanceStatistics(BaseModel):
+    total_income: float
+    total_distribution_expense: float
+    total_refund: float
+    net_profit: float
+    total_transactions: int
+
+    class Config:
+        from_attributes = True
+
+
+class FinanceListResponse(BaseModel):
+    total: int
+    items: List[FinancialLog]
+    statistics: FinanceStatistics
+
+    class Config:
+        from_attributes = True
