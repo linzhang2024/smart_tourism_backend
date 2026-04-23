@@ -79,9 +79,11 @@ class TicketOrder(Base):
     status = Column(SQLEnum(OrderStatus), default=OrderStatus.PENDING, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
+    distributor_id = Column(Integer, ForeignKey("distributors.id"), nullable=True)
 
     user = relationship("User", back_populates="orders")
     scenic_spot = relationship("ScenicSpot")
+    distributor = relationship("Distributor")
 
 
 class Tourist(Base):
@@ -192,3 +194,23 @@ class UserCoupon(Base):
     used_order_id = Column(Integer, ForeignKey("ticket_orders.id"), nullable=True)
 
     coupon = relationship("Coupon")
+
+
+def generate_distributor_code() -> str:
+    prefix = "DIST"
+    chars = string.ascii_uppercase + string.digits
+    random_part = ''.join(random.choices(chars, k=6))
+    return prefix + random_part
+
+
+class Distributor(Base):
+    __tablename__ = "distributors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    distributor_code = Column(String(20), unique=True, nullable=False, default=generate_distributor_code)
+    commission_rate = Column(Float, default=0.05, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")

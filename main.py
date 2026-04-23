@@ -2,7 +2,7 @@ import logging
 import json
 import traceback
 import threading
-from fastapi import FastAPI, Depends, HTTPException, status, APIRouter
+from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -740,11 +740,13 @@ def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
     )
 
 
-@app.post("/tickets/purchase", response_model=schemas.TicketOrder, status_code=status.HTTP_201_CREATED, tags=["门票支付"])
+@app.post("/tickets/purchase", response_model=schemas.TicketOrderWithDistributor, status_code=status.HTTP_201_CREATED, tags=["门票支付"])
 def purchase_ticket(
     order_data: schemas.TicketOrderCreate, 
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role(models.UserRole.TOURIST))
+    current_user: models.User = Depends(auth.require_role(models.UserRole.TOURIST)),
+    ref: Optional[str] = Query(None, description="分销商邀请码（URL参数）"),
+    x_distributor_code: Optional[str] = Header(None, alias="X-Distributor-Code", description="分销商邀请码（请求头）")
 ):
     from sqlalchemy import update as sql_update
     
@@ -754,6 +756,23 @@ def purchase_ticket(
     user: Optional[models.User] = None
     user_coupon: Optional[models.UserCoupon] = None
     coupon_value: int = 0
+    distributor: Optional[models.Distributor] = None
+    
+    distributor_code = ref or x_distributor_code
+    
+    if distributor_code:
+        distributor = db.query(models.Distributor).filter(
+            models.Distributor.distributor_code == distributor_code,
+            models.Distributor.is_active == True
+        ).first()
+        
+        if distributor:
+            log_info(
+                message=f"检测到分销商邀请码: {distributor_code}, 分销商ID: {distributor.id}",
+                action="DISTRIBUTOR_CODE_DETECTED",
+                tourist_id=order_data.user_id,
+                scenic_spot_id=order_data.scenic_spot_id
+            )
     
     log_info(
         message="开始处理购票请求",
@@ -954,10 +973,20 @@ def purchase_ticket(
             total_price=total_price,
             status=models.OrderStatus.PAID,
             created_at=datetime.utcnow(),
-            paid_at=datetime.utcnow()
+            paid_at=datetime.utcnow(),
+            distributor_id=distributor.id if distributor else None
         )
         db.add(order)
         db.flush()
+        
+        if distributor:
+            log_info(
+                message=f"订单已绑定分销商: 分销商ID={distributor.id}, 邀请码={distributor.distributor_code}, 佣金比例={distributor.commission_rate}",
+                action="DISTRIBUTOR_BOUND",
+                order_id=order.order_no,
+                tourist_id=order_data.user_id,
+                scenic_spot_id=order_data.scenic_spot_id
+            )
         
         if user_coupon:
             user_coupon.is_used = True
@@ -1025,7 +1054,19 @@ def purchase_ticket(
             quantity=order_data.quantity
         )
         
-        return order
+        return schemas.TicketOrderWithDistributor(
+            id=order.id,
+            order_no=order.order_no,
+            user_id=order.user_id,
+            scenic_spot_id=order.scenic_spot_id,
+            quantity=order.quantity,
+            total_price=order.total_price,
+            status=order.status,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
+            distributor_id=order.distributor_id,
+            distributor_code=distributor.distributor_code if distributor else None
+        )
         
     except HTTPException:
         raise
@@ -1517,6 +1558,201 @@ def exchange_coupon(
             message="兑换失败，请稍后重试",
             remaining_points=current_user.total_points
         )
+
+
+distributor_router = APIRouter(prefix="/distributors", tags=["分销管理"])
+
+
+@distributor_router.post("/", response_model=schemas.Distributor, status_code=status.HTTP_201_CREATED)
+def create_distributor(
+    distributor_data: schemas.DistributorCreate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    existing_distributor = db.query(models.Distributor).filter(
+        models.Distributor.user_id == distributor_data.user_id
+    ).first()
+    
+    if existing_distributor:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该用户已经是分销商"
+        )
+    
+    user = db.query(models.User).filter(
+        models.User.id == distributor_data.user_id
+    ).first()
+    
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在"
+        )
+    
+    new_distributor = models.Distributor(
+        user_id=distributor_data.user_id,
+        commission_rate=distributor_data.commission_rate or 0.05,
+        is_active=True
+    )
+    
+    db.add(new_distributor)
+    db.commit()
+    db.refresh(new_distributor)
+    
+    log_info(
+        message=f"创建分销商成功: 用户ID={distributor_data.user_id}, 邀请码={new_distributor.distributor_code}, 佣金比例={new_distributor.commission_rate}",
+        action="DISTRIBUTOR_CREATED",
+        tourist_id=distributor_data.user_id
+    )
+    
+    return new_distributor
+
+
+@distributor_router.get("/", response_model=List[schemas.DistributorWithDetails])
+def get_distributors(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    distributors = db.query(models.Distributor).order_by(
+        models.Distributor.created_at.desc()
+    ).offset(skip).limit(limit).all()
+    
+    result = []
+    for distributor in distributors:
+        db.refresh(distributor, ['user'])
+        result.append(distributor)
+    
+    return result
+
+
+@distributor_router.get("/{distributor_id}", response_model=schemas.DistributorWithDetails)
+def get_distributor(
+    distributor_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.id == distributor_id
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="分销商不存在"
+        )
+    
+    if current_user.role not in [models.UserRole.ADMIN, models.UserRole.STAFF]:
+        if distributor.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权查看其他分销商信息"
+            )
+    
+    db.refresh(distributor, ['user'])
+    return distributor
+
+
+@distributor_router.get("/code/{distributor_code}", response_model=schemas.Distributor)
+def get_distributor_by_code(
+    distributor_code: str,
+    db: Session = Depends(get_db)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.distributor_code == distributor_code,
+        models.Distributor.is_active == True
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="分销商邀请码无效或已停用"
+        )
+    
+    return distributor
+
+
+@distributor_router.put("/{distributor_id}", response_model=schemas.Distributor)
+def update_distributor(
+    distributor_id: int,
+    update_data: schemas.DistributorUpdate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.id == distributor_id
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="分销商不存在"
+        )
+    
+    update_dict = update_data.model_dump(exclude_unset=True)
+    
+    for key, value in update_dict.items():
+        setattr(distributor, key, value)
+    
+    db.commit()
+    db.refresh(distributor)
+    
+    log_info(
+        message=f"更新分销商信息: 分销商ID={distributor_id}, 更新字段={list(update_dict.keys())}",
+        action="DISTRIBUTOR_UPDATED"
+    )
+    
+    return distributor
+
+
+@distributor_router.post("/generate-link", response_model=Dict[str, str])
+def generate_promotion_link(
+    spot_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.user_id == current_user.id,
+        models.Distributor.is_active == True
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您不是有效的分销商"
+        )
+    
+    scenic_spot = db.query(models.ScenicSpot).filter(
+        models.ScenicSpot.id == spot_id
+    ).first()
+    
+    if scenic_spot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="景点不存在"
+        )
+    
+    promotion_link = f"/?ref={distributor.distributor_code}&spot={spot_id}"
+    full_link = f"http://localhost:8000{promotion_link}"
+    
+    log_info(
+        message=f"分销商 [{distributor.id}] 生成景点 [{spot_id}] 的推广链接",
+        action="PROMOTION_LINK_GENERATED",
+        tourist_id=current_user.id,
+        scenic_spot_id=spot_id
+    )
+    
+    return {
+        "distributor_code": distributor.distributor_code,
+        "spot_id": str(spot_id),
+        "promotion_link": promotion_link,
+        "full_link": full_link,
+        "commission_rate": f"{distributor.commission_rate * 100}%"
+    }
+
+
+app.include_router(distributor_router)
 
 
 if __name__ == "__main__":

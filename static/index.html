@@ -1498,6 +1498,152 @@
             margin-top: 5px;
         }
 
+        .distributor-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .distributor-section.active {
+            display: block;
+        }
+
+        .promotion-link-container {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .promotion-link-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00ff88, #00d2ff, #8b5cf6);
+        }
+
+        .promotion-link-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .promotion-link-header h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .promotion-link-header h3::before {
+            content: '';
+            width: 5px;
+            height: 28px;
+            background: linear-gradient(180deg, #00ff88, #00d2ff);
+            border-radius: 3px;
+        }
+
+        .promotion-link-form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .promotion-link-form .input-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .promotion-link-result {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            display: none;
+        }
+
+        .promotion-link-result.active {
+            display: block;
+        }
+
+        .promotion-link-result .result-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 8px;
+        }
+
+        .promotion-link-result .result-value {
+            font-size: 1rem;
+            color: #00d2ff;
+            word-break: break-all;
+            padding: 10px;
+            background: rgba(10, 10, 26, 0.8);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .promotion-link-result .result-meta {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .promotion-link-result .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .promotion-link-result .meta-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .promotion-link-result .meta-value {
+            font-size: 0.9rem;
+            color: #ffd700;
+        }
+
+        .btn-copy {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #00ff88, #00d2ff);
+            color: #0a0a1a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-copy:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        .btn-copy:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .copy-success {
+            background: linear-gradient(135deg, #00ff88, #00cc6a) !important;
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 1.8rem;
@@ -1684,6 +1830,47 @@
                     <tbody id="recordsBody">
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <div class="distributor-section" id="distributorSection">
+            <div class="promotion-link-container">
+                <div class="promotion-link-header">
+                    <h3>🔗 分销推广链接生成</h3>
+                    <span style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.5);">
+                        生成带有您专属邀请码的推广链接，游客通过此链接购票将自动绑定您的分销关系
+                    </span>
+                </div>
+                <div class="promotion-link-form">
+                    <div class="input-group">
+                        <label for="promotionSpotId">选择景点</label>
+                        <select id="promotionSpotId" style="width: 100%; padding: 14px 18px; font-size: 1rem; border: 2px solid rgba(139, 92, 246, 0.3); border-radius: 12px; background: rgba(10, 10, 26, 0.8); color: #ffffff;">
+                            <option value="">加载景点列表中...</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="generatePromotionLinkBtn">
+                        生成推广链接
+                    </button>
+                </div>
+                <div class="promotion-link-result" id="promotionLinkResult">
+                    <div class="result-label">推广链接</div>
+                    <div class="result-value" id="promotionLinkValue">-</div>
+                    <div class="result-meta">
+                        <div class="meta-item">
+                            <span class="meta-label">邀请码:</span>
+                            <span class="meta-value" id="promotionDistributorCode">-</span>
+                        </div>
+                        <div class="meta-item">
+                            <span class="meta-label">佣金比例:</span>
+                            <span class="meta-value" id="promotionCommissionRate">-</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px; display: flex; gap: 10px;">
+                        <button class="btn-copy" id="copyPromotionLinkBtn">
+                            📋 复制链接
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -3200,10 +3387,165 @@
             }
         });
 
+        let currentDistributor = null;
+
+        async function fetchCurrentDistributor() {
+            const token = getAuthToken();
+            if (!token) return null;
+            
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const username = payload.sub;
+                
+                const userResponse = await fetch('/auth/me', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!userResponse.ok) return null;
+                
+                const user = await userResponse.json();
+                
+                const distributorResponse = await fetch('/distributors/', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (distributorResponse.ok) {
+                    const distributors = await distributorResponse.json();
+                    const distributor = distributors.find(d => d.user_id === user.id);
+                    return distributor || null;
+                }
+                
+                return null;
+            } catch (e) {
+                console.error('获取分销商信息失败:', e);
+                return null;
+            }
+        }
+
+        async function fetchScenicSpots() {
+            const response = await fetch('/scenic-spots/');
+            if (!response.ok) return [];
+            return await response.json();
+        }
+
+        async function loadScenicSpotsForPromotion() {
+            const spotSelect = document.getElementById('promotionSpotId');
+            if (!spotSelect) return;
+            
+            try {
+                const spots = await fetchScenicSpots();
+                
+                spotSelect.innerHTML = '<option value="">请选择景点</option>';
+                
+                spots.forEach(spot => {
+                    const option = document.createElement('option');
+                    option.value = spot.id;
+                    option.textContent = `${spot.name} (ID: ${spot.id})`;
+                    spotSelect.appendChild(option);
+                });
+                
+                if (spots.length === 0) {
+                    spotSelect.innerHTML = '<option value="">暂无景点</option>';
+                }
+            } catch (e) {
+                console.error('加载景点列表失败:', e);
+                spotSelect.innerHTML = '<option value="">加载失败</option>';
+            }
+        }
+
+        function generatePromotionLink(spotId, distributorCode) {
+            const baseUrl = window.location.origin;
+            const promotionLink = `${baseUrl}/?ref=${distributorCode}&spot=${spotId}`;
+            return promotionLink;
+        }
+
+        async function handleGeneratePromotionLink() {
+            const spotId = document.getElementById('promotionSpotId').value;
+            const generateBtn = document.getElementById('generatePromotionLinkBtn');
+            const resultDiv = document.getElementById('promotionLinkResult');
+            
+            if (!spotId) {
+                showToast('请选择景点');
+                return;
+            }
+            
+            if (!currentDistributor) {
+                showToast('您不是分销商，无法生成推广链接');
+                return;
+            }
+            
+            const originalText = generateBtn.textContent;
+            generateBtn.textContent = '生成中...';
+            generateBtn.disabled = true;
+            
+            try {
+                const promotionLink = generatePromotionLink(spotId, currentDistributor.distributor_code);
+                
+                document.getElementById('promotionLinkValue').textContent = promotionLink;
+                document.getElementById('promotionDistributorCode').textContent = currentDistributor.distributor_code;
+                document.getElementById('promotionCommissionRate').textContent = `${(currentDistributor.commission_rate * 100).toFixed(1)}%`;
+                
+                resultDiv.classList.add('active');
+                
+                showSuccessToast('推广链接已生成');
+                
+                logPromotionAction('LINK_GENERATED', spotId);
+                
+            } catch (e) {
+                console.error('生成推广链接失败:', e);
+                showToast('生成推广链接失败，请稍后重试');
+            } finally {
+                generateBtn.textContent = originalText;
+                generateBtn.disabled = false;
+            }
+        }
+
+        async function handleCopyPromotionLink() {
+            const linkValue = document.getElementById('promotionLinkValue').textContent;
+            const copyBtn = document.getElementById('copyPromotionLinkBtn');
+            
+            if (!linkValue || linkValue === '-') {
+                showToast('请先生成推广链接');
+                return;
+            }
+            
+            try {
+                await navigator.clipboard.writeText(linkValue);
+                
+                copyBtn.classList.add('copy-success');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✅ 已复制';
+                
+                showSuccessToast('链接已复制到剪贴板');
+                
+                setTimeout(() => {
+                    copyBtn.classList.remove('copy-success');
+                    copyBtn.textContent = originalText;
+                }, 2000);
+                
+            } catch (e) {
+                console.error('复制链接失败:', e);
+                
+                const textArea = document.createElement('textarea');
+                textArea.value = linkValue;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                showSuccessToast('链接已复制到剪贴板');
+            }
+        }
+
+        function logPromotionAction(action, spotId) {
+            console.log(`[分销推广] 动作: ${action}, 景点ID: ${spotId}, 时间: ${new Date().toISOString()}`);
+        }
+
         const originalUpdateAuthUI = updateAuthUI;
-        updateAuthUI = function() {
+        updateAuthUI = async function() {
             originalUpdateAuthUI();
             
+            const distributorSection = document.getElementById('distributorSection');
             const complaintManagementSection = document.getElementById('complaintManagementSection');
             const token = getAuthToken();
             
@@ -3218,16 +3560,40 @@
                     } else {
                         complaintManagementSection.classList.remove('active');
                     }
+                    
+                    currentDistributor = await fetchCurrentDistributor();
+                    
+                    if (currentDistributor) {
+                        distributorSection.classList.add('active');
+                        loadScenicSpotsForPromotion();
+                    } else {
+                        distributorSection.classList.remove('active');
+                    }
+                    
                 } catch (e) {
+                    console.error('updateAuthUI 错误:', e);
                     complaintManagementSection.classList.remove('active');
+                    distributorSection.classList.remove('active');
                 }
             } else {
                 complaintManagementSection.classList.remove('active');
+                distributorSection.classList.remove('active');
+                currentDistributor = null;
             }
         };
 
         document.addEventListener('DOMContentLoaded', () => {
             updateAuthUI();
+            
+            const generateBtn = document.getElementById('generatePromotionLinkBtn');
+            if (generateBtn) {
+                generateBtn.addEventListener('click', handleGeneratePromotionLink);
+            }
+            
+            const copyBtn = document.getElementById('copyPromotionLinkBtn');
+            if (copyBtn) {
+                copyBtn.addEventListener('click', handleCopyPromotionLink);
+            }
         });
     </script>
 </body>
