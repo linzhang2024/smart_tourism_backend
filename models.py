@@ -80,6 +80,7 @@ class TicketOrder(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
     distributor_id = Column(Integer, ForeignKey("distributors.id"), nullable=True)
+    commission_amount = Column(Float, default=0.0, nullable=True)
 
     user = relationship("User", back_populates="orders")
     scenic_spot = relationship("ScenicSpot")

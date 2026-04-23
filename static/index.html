@@ -1644,7 +1644,244 @@
             background: linear-gradient(135deg, #00ff88, #00cc6a) !important;
         }
 
+        .earnings-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .earnings-section.active {
+            display: block;
+        }
+
+        .earnings-container {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .earnings-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #ffd700, #ffaa00, #ff6b6b);
+        }
+
+        .earnings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .earnings-header h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .earnings-header h3::before {
+            content: '';
+            width: 5px;
+            height: 28px;
+            background: linear-gradient(180deg, #ffd700, #ffaa00);
+            border-radius: 3px;
+        }
+
+        .earnings-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .earnings-stat-card {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 170, 0, 0.05));
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .earnings-stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.15);
+            border-color: rgba(255, 215, 0, 0.4);
+        }
+
+        .earnings-stat-card .stat-label {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 8px;
+        }
+
+        .earnings-stat-card .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #ffd700;
+        }
+
+        .earnings-stat-card .stat-value.currency::before {
+            content: '¥';
+            font-size: 1.2rem;
+            margin-right: 4px;
+        }
+
+        .earnings-stat-card .stat-sub {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 5px;
+        }
+
+        .earnings-orders-section {
+            margin-top: 20px;
+        }
+
+        .earnings-orders-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .earnings-orders-header h4 {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .earnings-orders-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(10, 10, 26, 0.5);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .earnings-orders-table th,
+        .earnings-orders-table td {
+            padding: 14px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .earnings-orders-table th {
+            background: rgba(255, 215, 0, 0.1);
+            color: rgba(255, 255, 255, 0.7);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .earnings-orders-table td {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+
+        .earnings-orders-table tr:hover td {
+            background: rgba(255, 215, 0, 0.05);
+        }
+
+        .earnings-orders-table .order-no {
+            color: #00d2ff;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+
+        .earnings-orders-table .commission-positive {
+            color: #00ff88;
+            font-weight: 600;
+        }
+
+        .earnings-orders-table .commission-positive::before {
+            content: '+¥';
+        }
+
+        .earnings-orders-table .status-paid {
+            color: #00ff88;
+            background: rgba(0, 255, 136, 0.1);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .earnings-no-data {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .earnings-no-data .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .refresh-btn {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 215, 0, 0.1);
+            color: #ffd700;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(255, 215, 0, 0.2);
+            border-color: rgba(255, 215, 0, 0.5);
+        }
+
+        .refresh-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .distributor-info-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(0, 210, 255, 0.1));
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 25px;
+            font-size: 0.85rem;
+        }
+
+        .distributor-info-badge .code {
+            color: #00d2ff;
+            font-weight: 600;
+            font-family: monospace;
+        }
+
+        .distributor-info-badge .rate {
+            color: #ffd700;
+            font-weight: 600;
+        }
+
         @media (max-width: 768px) {
+            .earnings-stats {
+                grid-template-columns: 1fr;
+            }
+
+            .earnings-orders-table {
+                font-size: 0.8rem;
+            }
+
+            .earnings-orders-table th,
+            .earnings-orders-table td {
+                padding: 10px 8px;
+            }
+        }
             .header h1 {
                 font-size: 1.8rem;
                 letter-spacing: 2px;
@@ -1869,6 +2106,74 @@
                         <button class="btn-copy" id="copyPromotionLinkBtn">
                             📋 复制链接
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="earnings-section" id="earningsSection">
+            <div class="earnings-container">
+                <div class="earnings-header">
+                    <h3>💰 我的收益</h3>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div class="distributor-info-badge" id="distributorInfoBadge">
+                            <span>邀请码:</span>
+                            <span class="code" id="earningsDistributorCode">-</span>
+                            <span>|</span>
+                            <span>佣金比例:</span>
+                            <span class="rate" id="earningsCommissionRate">-</span>
+                        </div>
+                        <button class="refresh-btn" id="refreshEarningsBtn">
+                            🔄 刷新数据
+                        </button>
+                    </div>
+                </div>
+
+                <div class="earnings-stats">
+                    <div class="earnings-stat-card">
+                        <div class="stat-label">总订单数</div>
+                        <div class="stat-value" id="earningsTotalOrders">0</div>
+                        <div class="stat-sub">由您带来的订单</div>
+                    </div>
+                    <div class="earnings-stat-card">
+                        <div class="stat-label">总营收</div>
+                        <div class="stat-value currency" id="earningsTotalRevenue">0.00</div>
+                        <div class="stat-sub">订单总金额</div>
+                    </div>
+                    <div class="earnings-stat-card">
+                        <div class="stat-label">累计佣金</div>
+                        <div class="stat-value currency" id="earningsTotalCommission">0.00</div>
+                        <div class="stat-sub">待结算佣金</div>
+                    </div>
+                </div>
+
+                <div class="earnings-orders-section">
+                    <div class="earnings-orders-header">
+                        <h4>📋 订单明细</h4>
+                    </div>
+                    <div id="earningsOrdersContainer">
+                        <table class="earnings-orders-table" id="earningsOrdersTable">
+                            <thead>
+                                <tr>
+                                    <th>订单号</th>
+                                    <th>景点</th>
+                                    <th>购票数量</th>
+                                    <th>订单金额</th>
+                                    <th>佣金收入</th>
+                                    <th>状态</th>
+                                    <th>下单时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="earningsOrdersBody">
+                            </tbody>
+                        </table>
+                        <div class="earnings-no-data" id="earningsNoData" style="display: none;">
+                            <div class="icon">📭</div>
+                            <div>暂无订单数据</div>
+                            <div style="font-size: 0.85rem; margin-top: 10px; color: rgba(255,255,255,0.3);">
+                                推广您的专属链接，游客通过链接购票后将显示在这里
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3541,11 +3846,177 @@
             console.log(`[分销推广] 动作: ${action}, 景点ID: ${spotId}, 时间: ${new Date().toISOString()}`);
         }
 
+        async function fetchDistributorEarnings() {
+            const token = getAuthToken();
+            if (!token) return null;
+            
+            try {
+                const response = await fetch('/distributors/me/earnings', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    console.warn('获取收益数据失败:', response.status);
+                    return null;
+                }
+                
+                return await response.json();
+            } catch (e) {
+                console.error('获取收益数据失败:', e);
+                return null;
+            }
+        }
+
+        async function fetchDistributorOrders() {
+            const token = getAuthToken();
+            if (!token) return [];
+            
+            try {
+                const response = await fetch('/distributors/me/orders', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    console.warn('获取订单列表失败:', response.status);
+                    return [];
+                }
+                
+                return await response.json();
+            } catch (e) {
+                console.error('获取订单列表失败:', e);
+                return [];
+            }
+        }
+
+        async function fetchDistributorStatus() {
+            const token = getAuthToken();
+            if (!token) return null;
+            
+            try {
+                const response = await fetch('/distributors/me/status', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    return null;
+                }
+                
+                return await response.json();
+            } catch (e) {
+                console.error('获取分销商状态失败:', e);
+                return null;
+            }
+        }
+
+        function renderEarningsStats(earnings) {
+            const totalOrdersEl = document.getElementById('earningsTotalOrders');
+            const totalRevenueEl = document.getElementById('earningsTotalRevenue');
+            const totalCommissionEl = document.getElementById('earningsTotalCommission');
+            const distributorCodeEl = document.getElementById('earningsDistributorCode');
+            const commissionRateEl = document.getElementById('earningsCommissionRate');
+
+            if (!earnings) {
+                if (totalOrdersEl) totalOrdersEl.textContent = '0';
+                if (totalRevenueEl) totalRevenueEl.textContent = '0.00';
+                if (totalCommissionEl) totalCommissionEl.textContent = '0.00';
+                return;
+            }
+
+            if (totalOrdersEl) totalOrdersEl.textContent = earnings.total_orders || 0;
+            if (totalRevenueEl) totalRevenueEl.textContent = (earnings.total_revenue || 0).toFixed(2);
+            if (totalCommissionEl) totalCommissionEl.textContent = (earnings.total_commission || 0).toFixed(2);
+            
+            if (distributorCodeEl && earnings.distributor_code) {
+                distributorCodeEl.textContent = earnings.distributor_code;
+            }
+            if (commissionRateEl && earnings.commission_rate !== undefined) {
+                commissionRateEl.textContent = `${(earnings.commission_rate * 100).toFixed(0)}%`;
+            }
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return date.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function renderOrdersList(orders) {
+            const tbody = document.getElementById('earningsOrdersBody');
+            const table = document.getElementById('earningsOrdersTable');
+            const noData = document.getElementById('earningsNoData');
+
+            if (!tbody) return;
+
+            if (!orders || orders.length === 0) {
+                tbody.innerHTML = '';
+                if (table) table.style.display = 'none';
+                if (noData) noData.style.display = 'block';
+                return;
+            }
+
+            if (table) table.style.display = '';
+            if (noData) noData.style.display = 'none';
+
+            tbody.innerHTML = orders.map(order => {
+                const shortOrderNo = order.order_no ? order.order_no.substring(0, 12) + '...' : '-';
+                const spotName = order.scenic_spot_name || '未知景点';
+                const statusClass = order.status === 'PAID' ? 'status-paid' : '';
+                const statusText = order.status === 'PAID' ? '已支付' : (order.status || '-');
+                
+                return `
+                    <tr>
+                        <td><span class="order-no" title="${order.order_no || '-'}">${shortOrderNo}</span></td>
+                        <td>${spotName}</td>
+                        <td>${order.quantity || 0} 张</td>
+                        <td>¥${(order.total_price || 0).toFixed(2)}</td>
+                        <td><span class="commission-positive">${(order.commission_amount || 0).toFixed(2)}</span></td>
+                        <td><span class="${statusClass}">${statusText}</span></td>
+                        <td>${formatDate(order.created_at)}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function loadAndRenderEarnings() {
+            const refreshBtn = document.getElementById('refreshEarningsBtn');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.textContent = '⏳ 加载中...';
+            }
+
+            try {
+                const [earnings, orders] = await Promise.all([
+                    fetchDistributorEarnings(),
+                    fetchDistributorOrders()
+                ]);
+                
+                renderEarningsStats(earnings);
+                renderOrdersList(orders);
+                
+                console.log('[收益数据] 已加载:', { earnings, ordersCount: orders.length });
+            } catch (e) {
+                console.error('加载收益数据失败:', e);
+                showToast('加载收益数据失败，请稍后重试');
+            } finally {
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 刷新数据';
+                }
+            }
+        }
+
         const originalUpdateAuthUI = updateAuthUI;
         updateAuthUI = async function() {
             originalUpdateAuthUI();
             
             const distributorSection = document.getElementById('distributorSection');
+            const earningsSection = document.getElementById('earningsSection');
             const complaintManagementSection = document.getElementById('complaintManagementSection');
             const token = getAuthToken();
             
@@ -3561,23 +4032,30 @@
                         complaintManagementSection.classList.remove('active');
                     }
                     
-                    currentDistributor = await fetchCurrentDistributor();
+                    const distributorStatus = await fetchDistributorStatus();
                     
-                    if (currentDistributor) {
+                    if (distributorStatus && distributorStatus.is_distributor && distributorStatus.is_active) {
                         distributorSection.classList.add('active');
+                        earningsSection.classList.add('active');
                         loadScenicSpotsForPromotion();
+                        loadAndRenderEarnings();
+                        
+                        console.log('[分销商] 已登录分销商:', distributorStatus.distributor_code);
                     } else {
                         distributorSection.classList.remove('active');
+                        earningsSection.classList.remove('active');
                     }
                     
                 } catch (e) {
                     console.error('updateAuthUI 错误:', e);
                     complaintManagementSection.classList.remove('active');
                     distributorSection.classList.remove('active');
+                    earningsSection.classList.remove('active');
                 }
             } else {
                 complaintManagementSection.classList.remove('active');
                 distributorSection.classList.remove('active');
+                earningsSection.classList.remove('active');
                 currentDistributor = null;
             }
         };
@@ -3593,6 +4071,11 @@
             const copyBtn = document.getElementById('copyPromotionLinkBtn');
             if (copyBtn) {
                 copyBtn.addEventListener('click', handleCopyPromotionLink);
+            }
+            
+            const refreshEarningsBtn = document.getElementById('refreshEarningsBtn');
+            if (refreshEarningsBtn) {
+                refreshEarningsBtn.addEventListener('click', loadAndRenderEarnings);
             }
         });
     </script>

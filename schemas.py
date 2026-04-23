@@ -381,3 +381,22 @@ class DistributorWithDetails(Distributor):
 class TicketOrderWithDistributor(TicketOrder):
     distributor_id: Optional[int] = None
     distributor_code: Optional[str] = None
+    commission_amount: Optional[float] = None
+
+
+class DistributorEarnings(BaseModel):
+    distributor_id: int
+    distributor_code: str
+    total_orders: int
+    total_revenue: float
+    total_commission: float
+    commission_rate: float
+
+    class Config:
+        from_attributes = True
+
+
+class DistributorOrderListItem(TicketOrder):
+    distributor_id: Optional[int] = None
+    commission_amount: Optional[float] = None
+    scenic_spot_name: Optional[str] = None

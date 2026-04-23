@@ -966,6 +966,19 @@ def purchase_ticket(
                 redemption_code=user_coupon.redemption_code
             )
         
+        commission_amount = 0.0
+        if distributor:
+            commission_amount = total_price * distributor.commission_rate
+            log_info(
+                message=f"订单已绑定分销商: 分销商ID={distributor.id}, 邀请码={distributor.distributor_code}, 佣金比例={distributor.commission_rate*100}%, 订单金额={total_price}元, 佣金={commission_amount}元",
+                action="DISTRIBUTOR_BOUND",
+                order_id=order.order_no,
+                tourist_id=order_data.user_id,
+                scenic_spot_id=order_data.scenic_spot_id,
+                commission_rate=distributor.commission_rate,
+                commission_amount=commission_amount
+            )
+        
         order = models.TicketOrder(
             user_id=order_data.user_id,
             scenic_spot_id=order_data.scenic_spot_id,
@@ -974,19 +987,11 @@ def purchase_ticket(
             status=models.OrderStatus.PAID,
             created_at=datetime.utcnow(),
             paid_at=datetime.utcnow(),
-            distributor_id=distributor.id if distributor else None
+            distributor_id=distributor.id if distributor else None,
+            commission_amount=commission_amount if distributor else None
         )
         db.add(order)
         db.flush()
-        
-        if distributor:
-            log_info(
-                message=f"订单已绑定分销商: 分销商ID={distributor.id}, 邀请码={distributor.distributor_code}, 佣金比例={distributor.commission_rate}",
-                action="DISTRIBUTOR_BOUND",
-                order_id=order.order_no,
-                tourist_id=order_data.user_id,
-                scenic_spot_id=order_data.scenic_spot_id
-            )
         
         if user_coupon:
             user_coupon.is_used = True
@@ -1065,7 +1070,8 @@ def purchase_ticket(
             created_at=order.created_at,
             paid_at=order.paid_at,
             distributor_id=order.distributor_id,
-            distributor_code=distributor.distributor_code if distributor else None
+            distributor_code=distributor.distributor_code if distributor else None,
+            commission_amount=order.commission_amount
         )
         
     except HTTPException:
@@ -1749,6 +1755,144 @@ def generate_promotion_link(
         "promotion_link": promotion_link,
         "full_link": full_link,
         "commission_rate": f"{distributor.commission_rate * 100}%"
+    }
+
+
+@distributor_router.get("/me/earnings", response_model=schemas.DistributorEarnings)
+def get_my_earnings(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.user_id == current_user.id,
+        models.Distributor.is_active == True
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您不是有效的分销商"
+        )
+    
+    from sqlalchemy import func
+    
+    order_stats = db.query(
+        func.count(models.TicketOrder.id).label('total_orders'),
+        func.sum(models.TicketOrder.total_price).label('total_revenue'),
+        func.sum(models.TicketOrder.commission_amount).label('total_commission')
+    ).filter(
+        models.TicketOrder.distributor_id == distributor.id,
+        models.TicketOrder.status == models.OrderStatus.PAID
+    ).first()
+    
+    total_orders = order_stats.total_orders or 0
+    total_revenue = order_stats.total_revenue or 0.0
+    total_commission = order_stats.total_commission or 0.0
+    
+    log_info(
+        message=f"分销商 [{distributor.id}] 查询收益: 订单数={total_orders}, 总收入={total_revenue}, 总佣金={total_commission}",
+        action="DISTRIBUTOR_EARNINGS_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.DistributorEarnings(
+        distributor_id=distributor.id,
+        distributor_code=distributor.distributor_code,
+        total_orders=total_orders,
+        total_revenue=total_revenue,
+        total_commission=total_commission,
+        commission_rate=distributor.commission_rate
+    )
+
+
+@distributor_router.get("/me/orders", response_model=List[schemas.DistributorOrderListItem])
+def get_my_orders(
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.user_id == current_user.id,
+        models.Distributor.is_active == True
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您不是有效的分销商"
+        )
+    
+    orders = db.query(models.TicketOrder).filter(
+        models.TicketOrder.distributor_id == distributor.id
+    ).order_by(
+        models.TicketOrder.created_at.desc()
+    ).offset(skip).limit(limit).all()
+    
+    result = []
+    for order in orders:
+        spot_name = None
+        if order.scenic_spot:
+            spot_name = order.scenic_spot.name
+        
+        result.append(schemas.DistributorOrderListItem(
+            id=order.id,
+            order_no=order.order_no,
+            user_id=order.user_id,
+            scenic_spot_id=order.scenic_spot_id,
+            quantity=order.quantity,
+            total_price=order.total_price,
+            status=order.status,
+            created_at=order.created_at,
+            paid_at=order.paid_at,
+            distributor_id=order.distributor_id,
+            commission_amount=order.commission_amount,
+            scenic_spot_name=spot_name
+        ))
+    
+    log_info(
+        message=f"分销商 [{distributor.id}] 查询订单列表: 共 {len(result)} 条",
+        action="DISTRIBUTOR_ORDERS_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return result
+
+
+@distributor_router.get("/me/status")
+def get_my_distributor_status(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.user_id == current_user.id
+    ).first()
+    
+    if distributor is None:
+        return {
+            "is_distributor": False,
+            "message": "您不是分销商"
+        }
+    
+    from sqlalchemy import func
+    
+    order_stats = db.query(
+        func.count(models.TicketOrder.id).label('total_orders'),
+        func.sum(models.TicketOrder.commission_amount).label('total_commission')
+    ).filter(
+        models.TicketOrder.distributor_id == distributor.id,
+        models.TicketOrder.status == models.OrderStatus.PAID
+    ).first()
+    
+    return {
+        "is_distributor": True,
+        "is_active": distributor.is_active,
+        "distributor_id": distributor.id,
+        "distributor_code": distributor.distributor_code,
+        "commission_rate": distributor.commission_rate,
+        "total_orders": order_stats.total_orders or 0,
+        "total_commission": order_stats.total_commission or 0.0,
+        "created_at": distributor.created_at
     }
 
 
