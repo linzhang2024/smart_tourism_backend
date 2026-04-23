@@ -296,6 +296,16 @@ def migrate_database():
                     conn.execute(text("ALTER TABLE point_logs ADD COLUMN is_expired BOOLEAN DEFAULT 0"))
                     print("[迁移] 完成!")
             
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='complaints'"))
+            if result.fetchone():
+                result = conn.execute(text("PRAGMA table_info(complaints)"))
+                columns = [row[1] for row in result]
+                
+                if 'is_points_rewarded' not in columns:
+                    print("[迁移] 添加 is_points_rewarded 列到 complaints 表...")
+                    conn.execute(text("ALTER TABLE complaints ADD COLUMN is_points_rewarded BOOLEAN DEFAULT 0"))
+                    print("[迁移] 完成!")
+            
             conn.commit()
         except Exception as e:
             print(f"[迁移] 警告: {e}")
@@ -1216,31 +1226,19 @@ def create_complaint(
         title=complaint_data.title,
         content=complaint_data.content,
         status=models.ComplaintStatus.PENDING,
+        is_points_rewarded=False,
         created_at=datetime.utcnow()
     )
     db.add(new_complaint)
     
-    points_earned = 50
-    current_user.total_points += points_earned
-    
-    point_log = models.PointLog(
-        user_id=current_user.id,
-        points_change=points_earned,
-        reason=f"投诉反馈获得积分"
-    )
-    db.add(point_log)
-    
-    update_member_level(current_user)
-    
     log_info(
-        message=f"用户 [{current_user.id}] 提交投诉反馈，获得 {points_earned} 积分",
-        action="COMPLAINT_POINTS_EARNED",
+        message=f"用户 [{current_user.id}] 提交投诉反馈，等待管理员回复",
+        action="COMPLAINT_CREATED",
         tourist_id=current_user.id
     )
     
     db.commit()
     db.refresh(new_complaint)
-    db.refresh(current_user)
     return new_complaint
 
 
@@ -1286,11 +1284,44 @@ def update_complaint(
     
     update_dict = update_data.model_dump(exclude_unset=True)
     
+    is_replying = False
+    if "reply" in update_dict and not complaint.is_points_rewarded:
+        new_reply = update_dict["reply"]
+        if new_reply and new_reply.strip():
+            is_replying = True
+    
     if "reply" in update_dict:
         complaint.reply = update_dict["reply"]
     
     if "status" in update_dict:
         complaint.status = update_dict["status"]
+    
+    if is_replying:
+        points_earned = 50
+        
+        user = db.query(models.User).filter(
+            models.User.id == complaint.user_id
+        ).first()
+        
+        if user:
+            user.total_points += points_earned
+            
+            point_log = models.PointLog(
+                user_id=complaint.user_id,
+                points_change=points_earned,
+                reason=f"投诉反馈获得积分，投诉ID: {complaint.id}"
+            )
+            db.add(point_log)
+            
+            update_member_level(user)
+            
+            complaint.is_points_rewarded = True
+            
+            log_info(
+                message=f"管理员回复投诉 [{complaint.id}]，用户 [{complaint.user_id}] 获得 {points_earned} 积分",
+                action="COMPLAINT_REPLY_POINTS_EARNED",
+                tourist_id=complaint.user_id
+            )
     
     db.commit()
     db.refresh(complaint)
@@ -1304,13 +1335,50 @@ def get_member_profile(
 ):
     from datetime import timedelta
     
+    now = datetime.utcnow()
+    
+    expired_logs = db.query(models.PointLog).filter(
+        models.PointLog.user_id == current_user.id,
+        models.PointLog.points_change > 0,
+        models.PointLog.is_expired == False,
+        models.PointLog.expires_at <= now
+    ).all()
+    
+    if expired_logs:
+        expired_points = sum(log.points_change for log in expired_logs)
+        
+        for log in expired_logs:
+            log.is_expired = True
+        
+        if current_user.total_points >= expired_points:
+            current_user.total_points -= expired_points
+        else:
+            current_user.total_points = 0
+        
+        expiration_log = models.PointLog(
+            user_id=current_user.id,
+            points_change=-expired_points,
+            reason=f"积分过期自动扣减，过期数量: {expired_points} 分",
+            is_expired=False
+        )
+        db.add(expiration_log)
+        
+        log_info(
+            message=f"用户 [{current_user.id}] 过期积分自动扣减: {expired_points} 分",
+            action="POINTS_EXPIRED",
+            tourist_id=current_user.id,
+            quantity=expired_points
+        )
+        
+        db.commit()
+        db.refresh(current_user)
+    
     recent_logs = db.query(models.PointLog).filter(
         models.PointLog.user_id == current_user.id
     ).order_by(
         models.PointLog.created_at.desc()
     ).limit(5).all()
     
-    now = datetime.utcnow()
     threshold_30d = now + timedelta(days=30)
     threshold_7d = now + timedelta(days=7)
     

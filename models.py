@@ -147,6 +147,7 @@ class Complaint(Base):
     content = Column(Text, nullable=False)
     status = Column(SQLEnum(ComplaintStatus), default=ComplaintStatus.PENDING, nullable=False)
     reply = Column(Text, nullable=True)
+    is_points_rewarded = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")

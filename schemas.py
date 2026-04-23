@@ -262,6 +262,7 @@ class Complaint(BaseModel):
     content: str
     status: ComplaintStatus
     reply: Optional[str] = None
+    is_points_rewarded: bool = False
     created_at: datetime
 
     class Config:
