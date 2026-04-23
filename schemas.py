@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -694,3 +694,26 @@ class FinanceListResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RefundRequest(BaseModel):
+    reason: Optional[str] = None
+    refund_amount: Optional[float] = None
+
+
+class RefundResponse(BaseModel):
+    success: bool
+    order_no: str
+    refund_amount: float
+    message: str
+
+
+class ReconciliationResult(BaseModel):
+    is_balanced: bool
+    order_total_income: float
+    financial_log_income: float
+    order_total_refund: float
+    financial_log_refund: float
+    difference: float
+    message: str
+    details: Optional[Dict[str, Any]] = None

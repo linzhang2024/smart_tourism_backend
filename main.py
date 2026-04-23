@@ -3275,6 +3275,262 @@ def get_financial_log(
     return log
 
 
+@finance_router.post("/reconciliation", response_model=schemas.ReconciliationResult, tags=["财务核算与对账中心"])
+def check_reconciliation(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from sqlalchemy import func
+    
+    paid_orders_total = db.query(func.sum(models.TicketOrder.total_price)).filter(
+        models.TicketOrder.status == models.OrderStatus.PAID
+    ).scalar() or 0.0
+    
+    refunded_orders = db.query(func.sum(models.TicketOrder.total_price)).filter(
+        models.TicketOrder.status == models.OrderStatus.REFUNDED
+    ).scalar() or 0.0
+    
+    order_total_income = paid_orders_total
+    order_total_refund = refunded_orders
+    
+    financial_income = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.INCOME
+    ).scalar() or 0.0
+    
+    financial_refund = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.REFUND
+    ).scalar() or 0.0
+    
+    expected_income = order_total_income - order_total_refund
+    actual_income = financial_income - financial_refund
+    
+    difference = round(abs(expected_income - actual_income), 2)
+    is_balanced = difference < 0.01
+    
+    log_info(
+        message=f"对账检查: 订单收入={order_total_income}, 订单退款={order_total_refund}, 财务收入={financial_income}, 财务退款={financial_refund}, 差额={difference}, 平衡={is_balanced}",
+        action="FINANCE_RECONCILIATION_CHECKED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.ReconciliationResult(
+        is_balanced=is_balanced,
+        order_total_income=round(order_total_income, 2),
+        financial_log_income=round(financial_income, 2),
+        order_total_refund=round(order_total_refund, 2),
+        financial_log_refund=round(financial_refund, 2),
+        difference=difference,
+        message="账目平衡" if is_balanced else f"账目不平衡，差额: {difference} 元",
+        details={
+            "paid_orders_count": db.query(models.TicketOrder).filter(
+                models.TicketOrder.status == models.OrderStatus.PAID
+            ).count(),
+            "refunded_orders_count": db.query(models.TicketOrder).filter(
+                models.TicketOrder.status == models.OrderStatus.REFUNDED
+            ).count(),
+            "financial_logs_count": db.query(models.FinancialLog).count(),
+            "expected_net_income": round(expected_income, 2),
+            "actual_net_income": round(actual_income, 2)
+        }
+    )
+
+
+@finance_router.get("/export/csv", tags=["财务核算与对账中心"])
+def export_financial_logs_csv(
+    start_date: Optional[str] = Query(None, description="开始日期，格式: YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期，格式: YYYY-MM-DD"),
+    transaction_type: Optional[schemas.TransactionType] = Query(None, description="交易类型筛选"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from datetime import datetime
+    from fastapi.responses import StreamingResponse
+    import io
+    
+    query = db.query(models.FinancialLog).options(
+        joinedload(models.FinancialLog.distributor)
+    )
+    
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            start_dt = start_dt.replace(hour=0, minute=0, second=0)
+            query = query.filter(models.FinancialLog.transaction_time >= start_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="开始日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
+    
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            end_dt = end_dt.replace(hour=23, minute=59, second=59)
+            query = query.filter(models.FinancialLog.transaction_time <= end_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="结束日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
+    
+    if transaction_type:
+        query = query.filter(models.FinancialLog.transaction_type == transaction_type)
+    
+    logs = query.order_by(
+        models.FinancialLog.transaction_time.desc(),
+        models.FinancialLog.id.desc()
+    ).all()
+    
+    output = io.StringIO()
+    
+    headers = ["流水ID", "交易时间", "交易类型", "订单号", "金额", "交易摘要", "关联分销商ID", "分销商姓名"]
+    output.write(",".join(headers) + "\n")
+    
+    for log in logs:
+        row = [
+            str(log.id),
+            log.transaction_time.strftime("%Y-%m-%d %H:%M:%S") if log.transaction_time else "",
+            log.transaction_type,
+            log.order_no or "",
+            f"{log.amount:.2f}",
+            (log.summary or "").replace(",", "，").replace("\n", " "),
+            str(log.related_distributor_id) if log.related_distributor_id else "",
+            log.distributor.user.username if log.distributor and log.distributor.user else (log.distributor.id if log.distributor else "")
+        ]
+        output.write(",".join(row) + "\n")
+    
+    output.seek(0)
+    
+    log_info(
+        message=f"导出财务流水 CSV，共 {len(logs)} 条记录",
+        action="FINANCE_LOGS_EXPORTED",
+        tourist_id=current_user.id
+    )
+    
+    filename = f"financial_logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv; charset=utf-8-sig",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Access-Control-Expose-Headers": "Content-Disposition"
+        }
+    )
+
+
+@app.post("/tickets/orders/{order_id}/refund", response_model=schemas.RefundResponse, tags=["门票支付"])
+def refund_ticket_order(
+    order_id: int,
+    refund_data: Optional[schemas.RefundRequest] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from datetime import datetime
+    from sqlalchemy.orm import joinedload
+    
+    order = db.query(models.TicketOrder).options(
+        joinedload(models.TicketOrder.distributor)
+    ).filter(
+        models.TicketOrder.id == order_id
+    ).first()
+    
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="订单不存在"
+        )
+    
+    if order.status == models.OrderStatus.REFUNDED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该订单已退款"
+        )
+    
+    if order.status != models.OrderStatus.PAID:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只有已支付的订单才能退款"
+        )
+    
+    refund_amount = order.total_price
+    if refund_data and refund_data.refund_amount is not None:
+        if refund_data.refund_amount > order.total_price:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="退款金额不能大于订单金额"
+            )
+        if refund_data.refund_amount < 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="退款金额不能为负数"
+            )
+        refund_amount = refund_data.refund_amount
+    
+    reason = refund_data.reason if refund_data else "管理员操作退款"
+    
+    try:
+        original_status = order.status
+        
+        order.status = models.OrderStatus.REFUNDED
+        
+        refund_log = models.FinancialLog(
+            transaction_type=models.TransactionType.REFUND,
+            order_no=order.order_no,
+            amount=refund_amount,
+            transaction_time=datetime.utcnow(),
+            summary=f"订单退款，订单号: {order.order_no}, 原订单金额: {order.total_price}元, 退款金额: {refund_amount}元, 原因: {reason}",
+            related_distributor_id=order.distributor_id
+        )
+        db.add(refund_log)
+        
+        if order.distributor and order.commission_amount and order.commission_amount > 0:
+            reverse_commission_log = models.FinancialLog(
+                transaction_type=models.TransactionType.DISTRIBUTION_EXPENSE,
+                order_no=order.order_no,
+                amount=-order.commission_amount,
+                transaction_time=datetime.utcnow(),
+                summary=f"退款冲抵分销佣金，订单号: {order.order_no}, 原佣金金额: {order.commission_amount}元",
+                related_distributor_id=order.distributor_id
+            )
+            db.add(reverse_commission_log)
+        
+        db.commit()
+        db.refresh(order)
+        
+        log_info(
+            message=f"订单退款成功: 订单号={order.order_no}, 原金额={order.total_price}, 退款金额={refund_amount}, 原状态={original_status}",
+            action="ORDER_REFUNDED",
+            order_id=order.order_no,
+            tourist_id=current_user.id,
+            scenic_spot_id=order.scenic_spot_id
+        )
+        
+        return schemas.RefundResponse(
+            success=True,
+            order_no=order.order_no,
+            refund_amount=round(refund_amount, 2),
+            message=f"订单退款成功，退款金额: {refund_amount} 元"
+        )
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        log_error(
+            message=f"订单退款失败: 订单ID={order_id}, 错误={str(e)}",
+            action="ORDER_REFUND_FAILED",
+            order_id=order_id,
+            tourist_id=current_user.id,
+            exc_info=True
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="退款操作失败，请稍后重试"
+        )
+
+
 app.include_router(finance_router)
 app.include_router(attendance_router)
 

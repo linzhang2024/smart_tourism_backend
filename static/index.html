@@ -1989,6 +1989,95 @@
             border-radius: 3px;
         }
 
+        .finance-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-secondary {
+            padding: 10px 18px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            background: rgba(139, 92, 246, 0.2);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(139, 92, 246, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(139, 92, 246, 0.2);
+        }
+
+        .btn-secondary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-export {
+            padding: 10px 18px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: #ffffff;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-export:hover {
+            background: linear-gradient(135deg, #047857, #059669);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .reconciliation-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .reconciliation-badge.balanced {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #34d399;
+        }
+
+        .reconciliation-badge.unbalanced {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #f87171;
+            animation: pulse-warning 2s infinite;
+        }
+
+        @keyframes pulse-warning {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+            }
+        }
+
         .finance-filters {
             display: flex;
             flex-wrap: wrap;
@@ -3519,10 +3608,24 @@
             <div class="finance-container">
                 <div class="finance-header">
                     <h3>💰 财务核算与对账中心</h3>
-                    <button class="btn-add" id="refreshFinanceBtn">
-                        <span>🔄</span>
-                        刷新数据
-                    </button>
+                    <div class="finance-header-actions">
+                        <div class="reconciliation-badge" id="reconciliationBadge" style="display: none;">
+                            <span class="badge-icon">✅</span>
+                            <span class="badge-text" id="reconciliationBadgeText">账目平衡</span>
+                        </div>
+                        <button class="btn btn-secondary" id="checkReconciliationBtn">
+                            <span>🔍</span>
+                            对账检查
+                        </button>
+                        <button class="btn btn-export" id="exportFinanceBtn">
+                            <span>📥</span>
+                            导出CSV
+                        </button>
+                        <button class="btn-add" id="refreshFinanceBtn">
+                            <span>🔄</span>
+                            刷新数据
+                        </button>
+                    </div>
                 </div>
 
                 <div class="finance-filters">
@@ -6808,6 +6911,140 @@
             loadFinanceData();
         }
 
+        async function checkReconciliation() {
+            const checkBtn = document.getElementById('checkReconciliationBtn');
+            const badge = document.getElementById('reconciliationBadge');
+            const badgeText = document.getElementById('reconciliationBadgeText');
+
+            if (checkBtn) {
+                checkBtn.disabled = true;
+                checkBtn.innerHTML = '<span>⏳</span> 检查中...';
+            }
+
+            try {
+                const response = await fetch('/finance/reconciliation', {
+                    method: 'POST',
+                    headers: getAuthHeaders()
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        clearAuthToken();
+                        updateAuthUI();
+                        throw new Error('请先登录');
+                    }
+                    throw new Error('对账检查失败');
+                }
+
+                const result = await response.json();
+
+                if (badge) {
+                    badge.style.display = 'flex';
+                    badge.classList.remove('balanced', 'unbalanced');
+                    badge.classList.add(result.is_balanced ? 'balanced' : 'unbalanced');
+
+                    const badgeIcon = badge.querySelector('.badge-icon');
+                    if (badgeIcon) {
+                        badgeIcon.textContent = result.is_balanced ? '✅' : '❌';
+                    }
+
+                    if (badgeText) {
+                        if (result.is_balanced) {
+                            badgeText.textContent = '账目平衡';
+                        } else {
+                            badgeText.textContent = `账差: ${result.difference} 元`;
+                        }
+                    }
+
+                    badge.title = `订单收入: ${result.order_total_income}, 财务收入: ${result.financial_log_income}, 订单退款: ${result.order_total_refund}, 财务退款: ${result.financial_log_refund}`;
+                }
+
+                if (result.is_balanced) {
+                    showSuccessToast('账目平衡，无异常');
+                } else {
+                    showToast(`⚠️ 账目不平衡！差额: ${result.difference} 元，请立即检查`);
+                }
+
+                console.log('[对账检查] 结果:', result);
+                return result;
+
+            } catch (error) {
+                console.error('对账检查失败:', error);
+                showToast(error.message || '对账检查失败');
+                return null;
+            } finally {
+                if (checkBtn) {
+                    checkBtn.disabled = false;
+                    checkBtn.innerHTML = '<span>🔍</span> 对账检查';
+                }
+            }
+        }
+
+        async function exportFinancialLogs() {
+            const exportBtn = document.getElementById('exportFinanceBtn');
+
+            if (exportBtn) {
+                exportBtn.disabled = true;
+                exportBtn.innerHTML = '<span>⏳</span> 导出中...';
+            }
+
+            try {
+                const startDate = document.getElementById('financeStartDate')?.value || null;
+                const endDate = document.getElementById('financeEndDate')?.value || null;
+                const transactionType = document.getElementById('financeTransactionType')?.value || null;
+
+                const params = [];
+                if (startDate) params.push(`start_date=${startDate}`);
+                if (endDate) params.push(`end_date=${endDate}`);
+                if (transactionType) params.push(`transaction_type=${encodeURIComponent(transactionType)}`);
+
+                const url = `/finance/export/csv${params.length > 0 ? '?' + params.join('&') : ''}`;
+
+                const response = await fetch(url, {
+                    headers: getAuthHeaders()
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        clearAuthToken();
+                        updateAuthUI();
+                        throw new Error('请先登录');
+                    }
+                    throw new Error('导出失败');
+                }
+
+                const blob = await response.blob();
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'financial_logs.csv';
+                if (contentDisposition) {
+                    const match = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (match && match[1]) {
+                        filename = match[1].replace(/['"]/g, '');
+                    }
+                }
+
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
+
+                showSuccessToast('导出成功！');
+                console.log('[导出] 财务流水已导出:', filename);
+
+            } catch (error) {
+                console.error('导出失败:', error);
+                showToast(error.message || '导出失败');
+            } finally {
+                if (exportBtn) {
+                    exportBtn.disabled = false;
+                    exportBtn.innerHTML = '<span>📥</span> 导出CSV';
+                }
+            }
+        }
+
         const originalUpdateAuthUI = updateAuthUI;
         updateAuthUI = async function() {
             originalUpdateAuthUI();
@@ -7100,6 +7337,16 @@
             const financeTransactionType = document.getElementById('financeTransactionType');
             if (financeTransactionType) {
                 financeTransactionType.addEventListener('change', loadFinanceData);
+            }
+
+            const checkReconciliationBtn = document.getElementById('checkReconciliationBtn');
+            if (checkReconciliationBtn) {
+                checkReconciliationBtn.addEventListener('click', checkReconciliation);
+            }
+
+            const exportFinanceBtn = document.getElementById('exportFinanceBtn');
+            if (exportFinanceBtn) {
+                exportFinanceBtn.addEventListener('click', exportFinancialLogs);
             }
         });
     </script>
