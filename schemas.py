@@ -292,3 +292,46 @@ class MemberProfileResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CouponBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="优惠券名称")
+    face_value: int = Field(..., ge=1, description="面值（元）")
+    points_required: int = Field(..., ge=1, description="所需积分")
+
+
+class CouponCreate(CouponBase):
+    pass
+
+
+class Coupon(CouponBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UserCoupon(BaseModel):
+    id: int
+    user_id: int
+    coupon_id: int
+    is_used: bool
+    obtained_at: datetime
+    used_at: Optional[datetime] = None
+    coupon: Optional[Coupon] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ExchangeRequest(BaseModel):
+    coupon_id: int = Field(..., description="优惠券ID")
+
+
+class ExchangeResponse(BaseModel):
+    success: bool
+    message: str
+    user_coupon: Optional[UserCoupon] = None
+    remaining_points: int = 0

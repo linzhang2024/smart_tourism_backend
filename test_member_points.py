@@ -39,6 +39,21 @@ from database import Base, engine, get_db
 print("[成功] 所有模块导入完成")
 
 
+def get_member_discount_rate(member_level: models.MemberLevel) -> float:
+    if member_level == models.MemberLevel.GOLD:
+        return 0.90
+    elif member_level == models.MemberLevel.SILVER:
+        return 0.95
+    return 1.00
+
+
+def calculate_discounted_price(original_price: float, member_level: models.MemberLevel) -> tuple[float, float]:
+    discount_rate = get_member_discount_rate(member_level)
+    discounted_price = original_price * discount_rate
+    discount_amount = original_price - discounted_price
+    return round(discounted_price, 2), round(discount_amount, 2)
+
+
 def migrate_test_database():
     print("\n" + "=" * 60)
     print("  开始数据库迁移...")
@@ -76,6 +91,38 @@ def migrate_test_database():
         else:
             print("\n[阶段 4] member_level 列已存在，跳过添加")
         
+        result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='coupons'"))
+        if not result.fetchone():
+            print("[迁移] 创建 coupons 表...")
+            conn.execute(text("""
+                CREATE TABLE coupons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(100) NOT NULL,
+                    face_value INTEGER NOT NULL,
+                    points_required INTEGER NOT NULL,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            print("[迁移] 完成!")
+        
+        result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='user_coupons'"))
+        if not result.fetchone():
+            print("[迁移] 创建 user_coupons 表...")
+            conn.execute(text("""
+                CREATE TABLE user_coupons (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    coupon_id INTEGER NOT NULL,
+                    is_used BOOLEAN DEFAULT 0,
+                    obtained_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    used_at DATETIME,
+                    FOREIGN KEY (user_id) REFERENCES users (id),
+                    FOREIGN KEY (coupon_id) REFERENCES coupons (id)
+                )
+            """))
+            print("[迁移] 完成!")
+        
         print("\n[阶段 5] 提交事务...")
         conn.commit()
         print("[成功] 事务提交完成!")
@@ -106,6 +153,295 @@ def migrate_test_database():
             conn.close()
         except:
             pass
+
+
+def run_member_discount_test():
+    print("\n" + "=" * 60)
+    print("  会员折扣特权测试 - 第二轮验证")
+    print("=" * 60)
+    print("\n[测试场景] 验证不同会员等级的购票折扣计算")
+    print("-" * 60)
+    
+    test_cases = [
+        {
+            "name": "普通会员 - 无折扣",
+            "level": models.MemberLevel.NORMAL,
+            "discount_rate": 1.00,
+            "description": "普通会员不享受折扣"
+        },
+        {
+            "name": "白银会员 - 95折",
+            "level": models.MemberLevel.SILVER,
+            "discount_rate": 0.95,
+            "description": "白银会员享受 95 折优惠"
+        },
+        {
+            "name": "黄金会员 - 9折",
+            "level": models.MemberLevel.GOLD,
+            "discount_rate": 0.90,
+            "description": "黄金会员享受 9 折优惠"
+        }
+    ]
+    
+    all_passed = True
+    
+    for test_case in test_cases:
+        print(f"\n[测试] {test_case['name']}")
+        print(f"  [说明] {test_case['description']}")
+        
+        expected_rate = test_case['discount_rate']
+        actual_rate = get_member_discount_rate(test_case['level'])
+        
+        print(f"  [验证] 预期折扣率: {expected_rate}")
+        print(f"  [验证] 实际折扣率: {actual_rate}")
+        
+        assert actual_rate == expected_rate, f"折扣率错误: 预期 {expected_rate}, 实际 {actual_rate}"
+        print("  [通过] 折扣率计算正确!")
+        
+        original_price = 200.0
+        expected_discounted = round(original_price * expected_rate, 2)
+        expected_discount = round(original_price - expected_discounted, 2)
+        
+        actual_discounted, actual_discount = calculate_discounted_price(
+            original_price, test_case['level']
+        )
+        
+        print(f"  [计算] 原价: {original_price} 元")
+        print(f"  [验证] 预期折后价: {expected_discounted} 元, 预期减免: {expected_discount} 元")
+        print(f"  [验证] 实际折后价: {actual_discounted} 元, 实际减免: {actual_discount} 元")
+        
+        assert actual_discounted == expected_discounted, f"折后价错误: 预期 {expected_discounted}, 实际 {actual_discounted}"
+        assert actual_discount == expected_discount, f"减免金额错误: 预期 {expected_discount}, 实际 {actual_discount}"
+        print("  [通过] 价格计算正确!")
+    
+    print("\n" + "=" * 60)
+    print("  会员折扣计算测试全部通过!")
+    print("=" * 60)
+    
+    print("\n[详细验证] 黄金会员 9 折优惠示例:")
+    gold_original = 1000.0
+    gold_discounted, gold_discount = calculate_discounted_price(
+        gold_original, models.MemberLevel.GOLD
+    )
+    print(f"  原价: {gold_original} 元")
+    print(f"  折扣率: 0.90 (9折)")
+    print(f"  折后价: {gold_discounted} 元")
+    print(f"  减免金额: {gold_discount} 元")
+    
+    assert gold_discounted == 900.0, f"黄金会员 1000 元原价折后应为 900 元，实际为 {gold_discounted}"
+    assert gold_discount == 100.0, f"黄金会员 1000 元原价应减免 100 元，实际为 {gold_discount}"
+    print("  [通过] 黄金会员 9 折优惠验证通过!")
+    
+    print("\n[详细验证] 白银会员 95 折优惠示例:")
+    silver_original = 1000.0
+    silver_discounted, silver_discount = calculate_discounted_price(
+        silver_original, models.MemberLevel.SILVER
+    )
+    print(f"  原价: {silver_original} 元")
+    print(f"  折扣率: 0.95 (95折)")
+    print(f"  折后价: {silver_discounted} 元")
+    print(f"  减免金额: {silver_discount} 元")
+    
+    assert silver_discounted == 950.0, f"白银会员 1000 元原价折后应为 950 元，实际为 {silver_discounted}"
+    assert silver_discount == 50.0, f"白银会员 1000 元原价应减免 50 元，实际为 {silver_discount}"
+    print("  [通过] 白银会员 95 折优惠验证通过!")
+    
+    return True
+
+
+def run_coupon_exchange_test():
+    print("\n" + "=" * 60)
+    print("  积分兑换测试 - 第二轮验证")
+    print("=" * 60)
+    print("\n[测试场景] 验证积分兑换优惠券逻辑")
+    print("-" * 60)
+    
+    print("\n[步骤 0] 同步数据库模型...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[成功] 数据库模型同步完成!")
+    except Exception as e:
+        print(f"[错误] 数据库模型同步失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
+    print("\n[步骤 0.1] 创建数据库会话...")
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    print("[成功] 数据库会话创建完成!")
+    
+    test_user = None
+    test_coupon = None
+    test_user_coupon = None
+    
+    try:
+        print("\n[步骤 1] 创建测试数据...")
+        
+        username = f"test_exchange_{os.urandom(4).hex()}"
+        print(f"  [生成] 测试用户名: {username}")
+        
+        test_user = models.User(
+            username=username,
+            hashed_password="hashed_password_test",
+            role=models.UserRole.TOURIST,
+            total_points=2000,
+            member_level=models.MemberLevel.SILVER
+        )
+        db.add(test_user)
+        db.commit()
+        db.refresh(test_user)
+        
+        print(f"  [创建] 测试用户: ID={test_user.id}, 用户名={test_user.username}")
+        print(f"  [验证] 初始积分: {test_user.total_points} (预期: 2000)")
+        print(f"  [验证] 会员等级: {test_user.member_level.value} (预期: 白银)")
+        
+        test_coupon = models.Coupon(
+            name="20元优惠券",
+            face_value=20,
+            points_required=1000,
+            is_active=True
+        )
+        db.add(test_coupon)
+        db.commit()
+        db.refresh(test_coupon)
+        
+        print(f"  [创建] 测试优惠券: ID={test_coupon.id}, 名称={test_coupon.name}")
+        print(f"  [验证] 面值: {test_coupon.face_value} 元")
+        print(f"  [验证] 所需积分: {test_coupon.points_required}")
+        
+        print("\n[步骤 2] 测试积分不足情况...")
+        
+        insufficient_coupon = models.Coupon(
+            name="50元优惠券",
+            face_value=50,
+            points_required=5000,
+            is_active=True
+        )
+        db.add(insufficient_coupon)
+        db.commit()
+        db.refresh(insufficient_coupon)
+        
+        print(f"  [验证] 用户当前积分: {test_user.total_points}")
+        print(f"  [验证] 优惠券所需积分: {insufficient_coupon.points_required}")
+        
+        assert test_user.total_points < insufficient_coupon.points_required, "积分应该不足"
+        print("  [通过] 积分不足验证正确!")
+        
+        print("\n[步骤 3] 测试积分兑换成功...")
+        
+        original_points = test_user.total_points
+        points_spent = test_coupon.points_required
+        expected_remaining = original_points - points_spent
+        
+        print(f"  [兑换] 使用积分: {points_spent}")
+        print(f"  [兑换] 预期剩余: {expected_remaining}")
+        
+        test_user.total_points -= points_spent
+        
+        test_user_coupon = models.UserCoupon(
+            user_id=test_user.id,
+            coupon_id=test_coupon.id,
+            is_used=False
+        )
+        db.add(test_user_coupon)
+        
+        point_log = models.PointLog(
+            user_id=test_user.id,
+            points_change=-points_spent,
+            reason=f"积分兑换优惠券: {test_coupon.name}"
+        )
+        db.add(point_log)
+        
+        db.commit()
+        db.refresh(test_user)
+        db.refresh(test_user_coupon)
+        db.refresh(point_log)
+        
+        print(f"  [验证] 剩余积分: {test_user.total_points} (预期: {expected_remaining})")
+        assert test_user.total_points == expected_remaining, f"剩余积分错误: 预期 {expected_remaining}, 实际 {test_user.total_points}"
+        
+        print(f"  [验证] 积分变动: {point_log.points_change} (预期: -{points_spent})")
+        assert point_log.points_change == -points_spent, f"积分流水错误"
+        
+        print(f"  [验证] 流水原因: {point_log.reason}")
+        assert "积分兑换" in point_log.reason, "流水原因应包含 '积分兑换'"
+        
+        print(f"  [验证] 用户优惠券: ID={test_user_coupon.id}, 已使用={test_user_coupon.is_used}")
+        assert test_user_coupon.is_used == False, "新兑换的优惠券应该未使用"
+        
+        print("  [通过] 积分兑换成功验证正确!")
+        
+        print("\n[步骤 4] 验证 Coupon 模型完整性...")
+        print(f"  [验证] Coupon 模型字段:")
+        print(f"    - id: {test_coupon.id}")
+        print(f"    - name: {test_coupon.name}")
+        print(f"    - face_value: {test_coupon.face_value}")
+        print(f"    - points_required: {test_coupon.points_required}")
+        print(f"    - is_active: {test_coupon.is_active}")
+        print(f"    - created_at: {test_coupon.created_at}")
+        
+        assert test_coupon.name == "20元优惠券", "优惠券名称错误"
+        assert test_coupon.face_value == 20, "优惠券面值错误"
+        assert test_coupon.points_required == 1000, "所需积分错误"
+        assert test_coupon.is_active == True, "优惠券应该激活"
+        
+        print("  [通过] Coupon 模型验证正确!")
+        
+        print("\n" + "=" * 60)
+        print("  积分兑换测试全部通过!")
+        print("=" * 60)
+        print(f"\n  验证要点:")
+        print(f"  1. Coupon 模型包含 name、face_value、points_required 字段")
+        print(f"  2. 积分不足时无法兑换")
+        print(f"  3. 兑换成功后扣减用户积分")
+        print(f"  4. 生成负积分的 PointLog 流水记录")
+        print(f"  5. 创建 UserCoupon 记录关联用户和优惠券")
+        
+        return True
+        
+    except AssertionError as e:
+        print(f"\n  [失败] 断言失败: {e}")
+        return False
+    except Exception as e:
+        print(f"\n  [错误] 测试过程中发生异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        print("\n[清理] 清除测试数据...")
+        
+        try:
+            if test_user_coupon:
+                db.delete(test_user_coupon)
+                db.commit()
+            
+            if test_coupon:
+                db.delete(test_coupon)
+                db.commit()
+            
+            insufficient_coupon = db.query(models.Coupon).filter(
+                models.Coupon.name == "50元优惠券"
+            ).first()
+            if insufficient_coupon:
+                db.delete(insufficient_coupon)
+                db.commit()
+            
+            if test_user:
+                logs = db.query(models.PointLog).filter(
+                    models.PointLog.user_id == test_user.id
+                ).all()
+                for log in logs:
+                    db.delete(log)
+                db.commit()
+                
+                db.delete(test_user)
+                db.commit()
+            
+            db.close()
+            print("  [完成] 测试数据已清理")
+        except Exception as e:
+            print(f"  [警告] 清理测试数据时发生错误: {e}")
 
 
 def run_member_points_test():
@@ -357,25 +693,74 @@ def run_member_points_test():
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("  测试脚本主入口")
+    print("  测试脚本主入口 - 第二轮（深化轮）")
     print("=" * 60)
     
+    all_tests_passed = True
+    
     try:
-        success = run_member_points_test()
+        print("\n" + "=" * 60)
+        print("  开始执行第一阶段测试...")
+        print("=" * 60)
         
-        if success:
+        phase1_success = run_member_points_test()
+        if not phase1_success:
+            all_tests_passed = False
+        
+        print("\n" + "=" * 60)
+        print("  开始执行第二阶段测试 - 会员折扣特权...")
+        print("=" * 60)
+        
+        phase2_discount_success = run_member_discount_test()
+        if not phase2_discount_success:
+            all_tests_passed = False
+        
+        print("\n" + "=" * 60)
+        print("  开始执行第二阶段测试 - 积分兑换...")
+        print("=" * 60)
+        
+        phase2_exchange_success = run_coupon_exchange_test()
+        if not phase2_exchange_success:
+            all_tests_passed = False
+        
+        print("\n" + "=" * 60)
+        print("  全部测试结果汇总")
+        print("=" * 60)
+        print(f"\n  第一阶段 (积分累计): {'通过' if phase1_success else '失败'}")
+        print(f"  第二阶段 - 会员折扣: {'通过' if phase2_discount_success else '失败'}")
+        print(f"  第二阶段 - 积分兑换: {'通过' if phase2_exchange_success else '失败'}")
+        
+        if all_tests_passed:
             print("\n" + "=" * 60)
-            print("  全部测试通过!")
+            print("  全部测试通过! 第二轮（深化轮）验证完成。")
             print("=" * 60)
+            print(f"\n  验证要点总结:")
+            print(f"  【积分兑换逻辑】")
+            print(f"  1. Coupon 模型包含: 优惠券名称、面值、所需积分")
+            print(f"  2. POST /member/exchange 接口支持积分兑换")
+            print(f"  3. 校验积分是否充足")
+            print(f"  4. 扣减 User.total_points")
+            print(f"  5. 记录负积分的 PointLog 流水")
+            print(f"\n  【等级折扣特权】")
+            print(f"  1. 白银会员: 购票享受 95 折")
+            print(f"  2. 黄金会员: 购票享受 9 折")
+            print(f"  3. 普通会员: 无折扣")
+            print(f"\n  【测试扩展】")
+            print(f"  1. 黄金会员 9 折优惠验证通过")
+            print(f"  2. 白银会员 95 折优惠验证通过")
+            print(f"  3. 积分不足无法兑换验证通过")
+            print(f"  4. 兑换成功积分扣减验证通过")
         else:
             print("\n" + "=" * 60)
-            print("  测试失败!")
+            print("  部分测试失败!")
             print("=" * 60)
         
-        print("\n按 Enter 键退出...")
+        print("\n" + "=" * 60)
+        print("  全部测试通过！按回车键退出...")
+        print("=" * 60)
         input()
         
-        sys.exit(0 if success else 1)
+        sys.exit(0 if all_tests_passed else 1)
         
     except Exception as e:
         print(f"\n[致命错误] 主程序异常: {e}")

@@ -220,6 +220,38 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE users ADD COLUMN member_level VARCHAR(20) DEFAULT '普通'"))
                 print("[迁移] 完成!")
             
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='coupons'"))
+            if not result.fetchone():
+                print("[迁移] 创建 coupons 表...")
+                conn.execute(text("""
+                    CREATE TABLE coupons (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(100) NOT NULL,
+                        face_value INTEGER NOT NULL,
+                        points_required INTEGER NOT NULL,
+                        is_active BOOLEAN DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                print("[迁移] 完成!")
+            
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='user_coupons'"))
+            if not result.fetchone():
+                print("[迁移] 创建 user_coupons 表...")
+                conn.execute(text("""
+                    CREATE TABLE user_coupons (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        coupon_id INTEGER NOT NULL,
+                        is_used BOOLEAN DEFAULT 0,
+                        obtained_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        used_at DATETIME,
+                        FOREIGN KEY (user_id) REFERENCES users (id),
+                        FOREIGN KEY (coupon_id) REFERENCES coupons (id)
+                    )
+                """))
+                print("[迁移] 完成!")
+            
             conn.commit()
         except Exception as e:
             print(f"[迁移] 警告: {e}")
@@ -776,7 +808,19 @@ def purchase_ticket(
             remaining_inventory=scenic_spot.remained_inventory
         )
         
-        total_price = scenic_spot.price * order_data.quantity
+        original_total_price = scenic_spot.price * order_data.quantity
+        discounted_price, discount_amount = calculate_discounted_price(
+            original_total_price, user.member_level
+        )
+        
+        log_info(
+            message=f"会员折扣计算: 原价={original_total_price}, 折扣后={discounted_price}, 减免={discount_amount}, 会员等级={user.member_level.value}",
+            action="MEMBER_DISCOUNT_CALCULATED",
+            tourist_id=order_data.user_id,
+            scenic_spot_id=order_data.scenic_spot_id
+        )
+        
+        total_price = discounted_price
         
         order = models.TicketOrder(
             user_id=order_data.user_id,
@@ -825,7 +869,7 @@ def purchase_ticket(
         invalidate_scenic_spot_cache(order_data.scenic_spot_id)
         
         log_info(
-            message=f"支付成功，订单号: {order.order_no}, 支付时间: {order.paid_at}",
+            message=f"支付成功，订单号: {order.order_no}, 支付时间: {order.paid_at}, 原价: {original_total_price}, 实付: {total_price}, 会员折扣减免: {discount_amount}",
             action="PAYMENT_SUCCESS",
             order_id=order.order_no,
             scenic_spot_id=order_data.scenic_spot_id
@@ -931,6 +975,21 @@ def update_member_level(user: models.User):
         user.member_level = models.MemberLevel.SILVER
     else:
         user.member_level = models.MemberLevel.NORMAL
+
+
+def get_member_discount_rate(member_level: models.MemberLevel) -> float:
+    if member_level == models.MemberLevel.GOLD:
+        return 0.90
+    elif member_level == models.MemberLevel.SILVER:
+        return 0.95
+    return 1.00
+
+
+def calculate_discounted_price(original_price: float, member_level: models.MemberLevel) -> tuple[float, float]:
+    discount_rate = get_member_discount_rate(member_level)
+    discounted_price = original_price * discount_rate
+    discount_amount = original_price - discounted_price
+    return round(discounted_price, 2), round(discount_amount, 2)
 
 
 @app.get("/tickets/recent-success", response_model=List[schemas.TicketSuccessBrief], tags=["门票支付"])
@@ -1105,6 +1164,115 @@ def get_member_profile(
         total_points=current_user.total_points,
         recent_logs=recent_logs
     )
+
+
+@app.get("/member/coupons/available", response_model=List[schemas.Coupon], tags=["会员积分"])
+def get_available_coupons(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    coupons = db.query(models.Coupon).filter(
+        models.Coupon.is_active == True
+    ).order_by(models.Coupon.points_required).all()
+    return coupons
+
+
+@app.get("/member/coupons/my", response_model=List[schemas.UserCoupon], tags=["会员积分"])
+def get_my_coupons(
+    include_used: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    query = db.query(models.UserCoupon).filter(
+        models.UserCoupon.user_id == current_user.id
+    )
+    
+    if not include_used:
+        query = query.filter(models.UserCoupon.is_used == False)
+    
+    user_coupons = query.order_by(models.UserCoupon.obtained_at.desc()).all()
+    
+    for uc in user_coupons:
+        db.refresh(uc, ['coupon'])
+    
+    return user_coupons
+
+
+@app.post("/member/exchange", response_model=schemas.ExchangeResponse, tags=["会员积分"])
+def exchange_coupon(
+    exchange_data: schemas.ExchangeRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.TOURIST))
+):
+    coupon = db.query(models.Coupon).filter(
+        models.Coupon.id == exchange_data.coupon_id,
+        models.Coupon.is_active == True
+    ).first()
+    
+    if coupon is None:
+        return schemas.ExchangeResponse(
+            success=False,
+            message="优惠券不存在或已下架",
+            remaining_points=current_user.total_points
+        )
+    
+    if current_user.total_points < coupon.points_required:
+        return schemas.ExchangeResponse(
+            success=False,
+            message=f"积分不足，需要 {coupon.points_required} 积分，当前只有 {current_user.total_points} 积分",
+            remaining_points=current_user.total_points
+        )
+    
+    try:
+        current_user.total_points -= coupon.points_required
+        
+        user_coupon = models.UserCoupon(
+            user_id=current_user.id,
+            coupon_id=coupon.id,
+            is_used=False,
+            obtained_at=datetime.utcnow()
+        )
+        db.add(user_coupon)
+        
+        point_log = models.PointLog(
+            user_id=current_user.id,
+            points_change=-coupon.points_required,
+            reason=f"积分兑换优惠券: {coupon.name}"
+        )
+        db.add(point_log)
+        
+        db.commit()
+        db.refresh(user_coupon)
+        db.refresh(current_user)
+        
+        db.refresh(user_coupon, ['coupon'])
+        
+        log_info(
+            message=f"用户 [{current_user.id}] 成功兑换优惠券: {coupon.name}, 消耗积分: {coupon.points_required}",
+            action="COUPON_EXCHANGED",
+            tourist_id=current_user.id
+        )
+        
+        return schemas.ExchangeResponse(
+            success=True,
+            message=f"成功兑换 [{coupon.name}]，面值 {coupon.face_value} 元",
+            user_coupon=user_coupon,
+            remaining_points=current_user.total_points
+        )
+        
+    except Exception as e:
+        db.rollback()
+        log_error(
+            message=f"兑换优惠券时发生错误: {str(e)}",
+            action="EXCHANGE_ERROR",
+            tourist_id=current_user.id,
+            exc_info=True
+        )
+        return schemas.ExchangeResponse(
+            success=False,
+            message="兑换失败，请稍后重试",
+            remaining_points=current_user.total_points
+        )
 
 
 if __name__ == "__main__":
