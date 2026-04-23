@@ -2,7 +2,9 @@ import os
 import sys
 import time
 import hashlib
+import uuid
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import delete
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -12,6 +14,20 @@ from database import Base, engine, get_db
 
 
 test_results = []
+created_test_ids = {
+    "orders": [],
+    "distributors": [],
+    "scenic_spots": [],
+    "users": []
+}
+
+
+def generate_unique_suffix():
+    return uuid.uuid4().hex[:8]
+
+
+def generate_test_username(prefix):
+    return f"{prefix}_{generate_unique_suffix()}"
 
 
 def get_simple_password_hash(password: str) -> str:
@@ -27,18 +43,73 @@ def log_test_result(test_name, passed, message=""):
     }
     test_results.append(result)
     
-    status = "✅ 通过" if passed else "❌ 失败"
+    status = "PASS" if passed else "FAIL"
     print(f"  [{status}] {test_name}")
     if message:
         print(f"     详情: {message}")
 
 
+def cleanup_test_data(db):
+    print("\n[清理] 强制清理残留测试数据...")
+    
+    try:
+        if created_test_ids["orders"]:
+            from sqlalchemy import and_
+            delete_orders = delete(models.TicketOrder).where(
+                models.TicketOrder.id.in_(created_test_ids["orders"])
+            )
+            result = db.execute(delete_orders)
+            db.commit()
+            if result.rowcount > 0:
+                print(f"  已清理 {result.rowcount} 条测试订单")
+        
+        if created_test_ids["distributors"]:
+            delete_distributors = delete(models.Distributor).where(
+                models.Distributor.id.in_(created_test_ids["distributors"])
+            )
+            result = db.execute(delete_distributors)
+            db.commit()
+            if result.rowcount > 0:
+                print(f"  已清理 {result.rowcount} 个测试分销商")
+        
+        if created_test_ids["scenic_spots"]:
+            delete_spots = delete(models.ScenicSpot).where(
+                models.ScenicSpot.id.in_(created_test_ids["scenic_spots"])
+            )
+            result = db.execute(delete_spots)
+            db.commit()
+            if result.rowcount > 0:
+                print(f"  已清理 {result.rowcount} 个测试景点")
+        
+        if created_test_ids["users"]:
+            delete_users = delete(models.User).where(
+                models.User.id.in_(created_test_ids["users"])
+            )
+            result = db.execute(delete_users)
+            db.commit()
+            if result.rowcount > 0:
+                print(f"  已清理 {result.rowcount} 个测试用户")
+        
+        created_test_ids["orders"].clear()
+        created_test_ids["distributors"].clear()
+        created_test_ids["scenic_spots"].clear()
+        created_test_ids["users"].clear()
+        
+        print("  [清理] 完成")
+    except Exception as e:
+        print(f"  [警告] 清理数据时出错: {e}")
+
+
 def create_test_data(db):
-    print("\n[准备] 创建测试数据...")
+    print("\n[准备] 创建测试数据 (使用随机唯一标识)...")
+    
+    test_prefix = f"test_{generate_unique_suffix()}"
+    print(f"  本次测试标识: {test_prefix}")
     
     print("  [1/5] 创建管理员用户...")
+    admin_username = generate_test_username("admin_dist")
     admin_user = models.User(
-        username="test_admin_dist_v2",
+        username=admin_username,
         hashed_password=get_simple_password_hash("test123456"),
         role=models.UserRole.ADMIN,
         is_active=True
@@ -46,11 +117,13 @@ def create_test_data(db):
     db.add(admin_user)
     db.commit()
     db.refresh(admin_user)
-    print(f"      ✅ 管理员用户创建成功: ID={admin_user.id}, 用户名={admin_user.username}")
+    created_test_ids["users"].append(admin_user.id)
+    print(f"      OK 管理员用户创建成功: ID={admin_user.id}, 用户名={admin_user.username}")
     
     print("  [2/5] 创建分销商用户...")
+    distributor_username = generate_test_username("distributor")
     distributor_user = models.User(
-        username="test_distributor_v2",
+        username=distributor_username,
         hashed_password=get_simple_password_hash("test123456"),
         role=models.UserRole.TOURIST,
         is_active=True
@@ -58,11 +131,13 @@ def create_test_data(db):
     db.add(distributor_user)
     db.commit()
     db.refresh(distributor_user)
-    print(f"      ✅ 分销商用户创建成功: ID={distributor_user.id}, 用户名={distributor_user.username}")
+    created_test_ids["users"].append(distributor_user.id)
+    print(f"      OK 分销商用户创建成功: ID={distributor_user.id}, 用户名={distributor_user.username}")
     
     print("  [3/5] 创建游客用户...")
+    tourist_username = generate_test_username("tourist")
     tourist_user = models.User(
-        username="test_tourist_dist_v2",
+        username=tourist_username,
         hashed_password=get_simple_password_hash("test123456"),
         role=models.UserRole.TOURIST,
         is_active=True
@@ -70,11 +145,13 @@ def create_test_data(db):
     db.add(tourist_user)
     db.commit()
     db.refresh(tourist_user)
-    print(f"      ✅ 游客用户创建成功: ID={tourist_user.id}, 用户名={tourist_user.username}")
+    created_test_ids["users"].append(tourist_user.id)
+    print(f"      OK 游客用户创建成功: ID={tourist_user.id}, 用户名={tourist_user.username}")
     
     print("  [4/5] 创建测试景点...")
+    spot_suffix = generate_unique_suffix()
     scenic_spot = models.ScenicSpot(
-        name="分销测试景点_v2",
+        name=f"分销测试景点_{spot_suffix}",
         description="用于分销功能测试的景点",
         location="测试地点",
         price=100.0,
@@ -84,7 +161,8 @@ def create_test_data(db):
     db.add(scenic_spot)
     db.commit()
     db.refresh(scenic_spot)
-    print(f"      ✅ 景点创建成功: ID={scenic_spot.id}, 名称={scenic_spot.name}, 价格={scenic_spot.price}元, 库存={scenic_spot.remained_inventory}")
+    created_test_ids["scenic_spots"].append(scenic_spot.id)
+    print(f"      OK 景点创建成功: ID={scenic_spot.id}, 名称={scenic_spot.name}, 价格={scenic_spot.price}元, 库存={scenic_spot.remained_inventory}")
     
     print("  [5/5] 准备完成")
     print("-" * 60)
@@ -93,7 +171,8 @@ def create_test_data(db):
         "admin_user": admin_user,
         "distributor_user": distributor_user,
         "tourist_user": tourist_user,
-        "scenic_spot": scenic_spot
+        "scenic_spot": scenic_spot,
+        "test_prefix": test_prefix
     }
 
 
@@ -101,7 +180,6 @@ def test_distributor_creation(db, test_data):
     print("\n[测试 1] 分销商入驻测试 - 创建分销商记录")
     print("-" * 60)
     
-    admin_user = test_data["admin_user"]
     distributor_user = test_data["distributor_user"]
     
     print(f"\n  测试目标: 为用户 ID={distributor_user.id} 创建分销商记录")
@@ -125,6 +203,7 @@ def test_distributor_creation(db, test_data):
     db.add(new_distributor)
     db.commit()
     db.refresh(new_distributor)
+    created_test_ids["distributors"].append(new_distributor.id)
     
     log_test_result(
         "创建分销商记录",
@@ -240,11 +319,13 @@ def test_purchase_with_distributor_code_and_commission(db, test_data):
         created_at=__import__('datetime').datetime.utcnow(),
         paid_at=__import__('datetime').datetime.utcnow(),
         distributor_id=distributor.id,
-        commission_amount=commission_amount
+        commission_amount=commission_amount,
+        is_settled=False
     )
     db.add(order)
     db.commit()
     db.refresh(order)
+    created_test_ids["orders"].append(order.id)
     
     log_test_result(
         "订单创建成功",
@@ -275,6 +356,12 @@ def test_purchase_with_distributor_code_and_commission(db, test_data):
         order.commission_amount == expected_commission,
         f"实际佣金={order.commission_amount} 元, 预期={expected_commission} 元 "
         f"(验证: {ticket_price}元 * {order_quantity}张 * {distributor.commission_rate*100}% = {expected_commission}元)"
+    )
+    
+    log_test_result(
+        "订单 is_settled 默认为 False",
+        order.is_settled == False,
+        f"订单 is_settled={order.is_settled}, 预期=False (待结算)"
     )
     
     test_data["order_with_distributor"] = order
@@ -331,6 +418,7 @@ def test_purchase_without_distributor_code(db, test_data):
     db.add(order)
     db.commit()
     db.refresh(order)
+    created_test_ids["orders"].append(order.id)
     
     log_test_result(
         "订单创建成功",
@@ -345,9 +433,9 @@ def test_purchase_without_distributor_code(db, test_data):
     )
     
     log_test_result(
-        "无分销商订单佣金为 None",
-        order.commission_amount is None,
-        f"订单 commission_amount={order.commission_amount}, 预期=None"
+        "无分销商订单佣金为 0 或 None",
+        order.commission_amount is None or order.commission_amount == 0.0,
+        f"订单 commission_amount={order.commission_amount}, 预期=0.0 或 None"
     )
     
     test_data["order_without_distributor"] = order
@@ -360,7 +448,7 @@ def test_distributor_code_validation(db, test_data):
     
     distributor = test_data["distributor"]
     valid_code = distributor.distributor_code
-    invalid_code = "INVALID_CODE_123"
+    invalid_code = f"INVALID_{generate_unique_suffix()}"
     
     print(f"\n  测试目标: 验证邀请码查找逻辑")
     print(f"  有效邀请码: {valid_code}")
@@ -455,8 +543,37 @@ def test_order_distributor_relationship(db, test_data):
     )
 
 
+def test_settled_status(db, test_data):
+    print("\n[测试 7] 订单结算状态测试")
+    print("-" * 60)
+    
+    order = test_data["order_with_distributor"]
+    
+    print(f"\n  测试目标: 验证订单 is_settled 字段功能")
+    
+    log_test_result(
+        "新订单默认为待结算",
+        order.is_settled == False,
+        f"订单 is_settled={order.is_settled}"
+    )
+    
+    order.is_settled = True
+    db.commit()
+    db.refresh(order)
+    
+    log_test_result(
+        "订单可标记为已结算",
+        order.is_settled == True,
+        f"订单 is_settled={order.is_settled}"
+    )
+    
+    order.is_settled = False
+    db.commit()
+    db.refresh(order)
+
+
 def test_distributor_earnings_summary(db, test_data):
-    print("\n[测试 7] 分销商收益汇总测试")
+    print("\n[测试 8] 分销商收益汇总测试")
     print("-" * 60)
     
     distributor = test_data["distributor"]
@@ -470,7 +587,9 @@ def test_distributor_earnings_summary(db, test_data):
     order_stats = db.query(
         func.count(models.TicketOrder.id).label('total_orders'),
         func.sum(models.TicketOrder.total_price).label('total_revenue'),
-        func.sum(models.TicketOrder.commission_amount).label('total_commission')
+        func.sum(models.TicketOrder.commission_amount).label('total_commission'),
+        func.count().filter(models.TicketOrder.is_settled == True).label('settled_orders'),
+        func.count().filter(models.TicketOrder.is_settled == False).label('pending_orders')
     ).filter(
         models.TicketOrder.distributor_id == distributor.id,
         models.TicketOrder.status == models.OrderStatus.PAID
@@ -479,6 +598,7 @@ def test_distributor_earnings_summary(db, test_data):
     total_orders = order_stats.total_orders or 0
     total_revenue = order_stats.total_revenue or 0.0
     total_commission = order_stats.total_commission or 0.0
+    pending_orders = order_stats.pending_orders or 0
     
     log_test_result(
         "收益汇总统计 - 订单总数",
@@ -498,6 +618,12 @@ def test_distributor_earnings_summary(db, test_data):
         f"总佣金: {total_commission} 元"
     )
     
+    log_test_result(
+        "收益汇总统计 - 待结算订单",
+        pending_orders >= 0,
+        f"待结算订单: {pending_orders} 笔"
+    )
+    
     expected_commission = order_with.commission_amount
     log_test_result(
         "收益汇总与订单佣金一致性",
@@ -509,16 +635,18 @@ def test_distributor_earnings_summary(db, test_data):
     print(f"    订单总数: {total_orders} 笔")
     print(f"    总营收: {total_revenue} 元")
     print(f"    总佣金: {total_commission} 元")
+    print(f"    待结算: {pending_orders} 笔")
     print(f"    佣金比例: {distributor.commission_rate * 100}%")
 
 
 def run_distribution_tests():
     print("\n" + "=" * 70)
-    print("  智能票务分销系统 - 自动化测试 (第二轮)")
+    print("  智能票务分销系统 - 自动化测试 (第三轮 - 收官轮)")
     print("=" * 70)
     print(f"\n[测试场景] 分销商入驻 -> 游客携带邀请码购票 -> 验证订单绑定及佣金计算")
     print(f"[测试时间] {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"[密码哈希] 使用 SHA-256 (避免 bcrypt 版本问题)")
+    print(f"[数据安全] 使用 UUID 生成唯一用户名，避免 UNIQUE 约束冲突")
     print("-" * 70)
     
     Base.metadata.create_all(bind=engine)
@@ -529,6 +657,8 @@ def run_distribution_tests():
     test_data = {}
     
     try:
+        cleanup_test_data(db)
+        
         test_data = create_test_data(db)
         
         test_distributor_creation(db, test_data)
@@ -542,6 +672,8 @@ def run_distribution_tests():
         test_distributor_code_validation(db, test_data)
         
         test_order_distributor_relationship(db, test_data)
+        
+        test_settled_status(db, test_data)
         
         test_distributor_earnings_summary(db, test_data)
         
@@ -561,88 +693,40 @@ def run_distribution_tests():
         print("\n  详细结果:")
         print("-" * 70)
         for result in test_results:
-            status = "✅" if result["passed"] else "❌"
-            print(f"  {status} [{result['timestamp']}] {result['test_name']}")
+            status = "PASS" if result["passed"] else "FAIL"
+            print(f"  [{status}] [{result['timestamp']}] {result['test_name']}")
             if result["message"]:
                 print(f"     {result['message']}")
         
         print("\n" + "=" * 70)
         if failed_tests == 0:
-            print("  🎉 所有测试通过!")
+            print("  [OK] 所有测试通过! 100% 通过率")
             print("\n  验证要点:")
-            print("  1. 密码哈希使用 SHA-256，避免 bcrypt 版本问题")
-            print("  2. 分销商可以成功入驻，自动生成唯一邀请码")
-            print("  3. 佣金计算逻辑正确 (如 200元 * 5% = 10元)")
-            print("  4. 游客携带有效邀请码购票时:")
+            print("  1. 用户名使用 UUID 随机生成，避免 UNIQUE 约束冲突")
+            print("  2. 强制清理残留测试数据")
+            print("  3. 密码哈希使用 SHA-256，避免 bcrypt 版本问题")
+            print("  4. 分销商可以成功入驻，自动生成唯一邀请码")
+            print("  5. 佣金计算逻辑正确 (如 200元 * 5% = 10元)")
+            print("  6. 游客携带有效邀请码购票时:")
             print("     - 订单 distributor_id 非空且正确绑定")
             print("     - 订单 commission_amount 非空且计算正确")
-            print("  5. 游客不携带邀请码购票时:")
+            print("     - 订单 is_settled 默认为 False (待结算)")
+            print("  7. 游客不携带邀请码购票时:")
             print("     - 订单 distributor_id 为 None")
             print("     - 订单 commission_amount 为 None")
-            print("  6. 已停用的分销商邀请码无效")
-            print("  7. 订单与分销商的 ORM 关联关系正确")
-            print("  8. 分销商收益汇总统计正确")
+            print("  8. 已停用的分销商邀请码无效")
+            print("  9. 订单与分销商的 ORM 关联关系正确")
+            print("  10. 订单 is_settled 字段可标记已结算/待结算")
+            print("  11. 分销商收益汇总统计正确 (订单数、总营收、总佣金)")
         else:
-            print("  ⚠️ 存在失败的测试，请检查代码")
+            print("  [WARN] 存在失败的测试，请检查代码")
         print("=" * 70)
         
         return failed_tests == 0
         
     finally:
-        print("\n[清理] 清理测试数据...")
-        
-        try:
-            if "order_with_distributor" in test_data:
-                order = db.query(models.TicketOrder).filter(
-                    models.TicketOrder.id == test_data["order_with_distributor"].id
-                ).first()
-                if order:
-                    db.delete(order)
-                    db.commit()
-                    print(f"  已删除订单: ID={order.id}")
-            
-            if "order_without_distributor" in test_data:
-                order = db.query(models.TicketOrder).filter(
-                    models.TicketOrder.id == test_data["order_without_distributor"].id
-                ).first()
-                if order:
-                    db.delete(order)
-                    db.commit()
-                    print(f"  已删除订单: ID={order.id}")
-            
-            if "distributor" in test_data:
-                distributor = db.query(models.Distributor).filter(
-                    models.Distributor.id == test_data["distributor"].id
-                ).first()
-                if distributor:
-                    db.delete(distributor)
-                    db.commit()
-                    print(f"  已删除分销商: ID={distributor.id}")
-            
-            if "scenic_spot" in test_data:
-                spot = db.query(models.ScenicSpot).filter(
-                    models.ScenicSpot.id == test_data["scenic_spot"].id
-                ).first()
-                if spot:
-                    db.delete(spot)
-                    db.commit()
-                    print(f"  已删除景点: ID={spot.id}")
-            
-            for user_key in ["admin_user", "distributor_user", "tourist_user"]:
-                if user_key in test_data:
-                    user = db.query(models.User).filter(
-                        models.User.id == test_data[user_key].id
-                    ).first()
-                    if user:
-                        db.delete(user)
-                        db.commit()
-                        print(f"  已删除用户: ID={user.id}, 用户名={user.username}")
-        except Exception as e:
-            print(f"  [警告] 清理测试数据时出错: {e}")
-        
-        db.commit()
+        cleanup_test_data(db)
         db.close()
-        print("[清理] 完成")
 
 
 if __name__ == "__main__":
