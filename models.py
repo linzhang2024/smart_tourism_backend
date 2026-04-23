@@ -216,3 +216,29 @@ class Distributor(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
+
+
+class WorkShift(Base):
+    __tablename__ = "work_shifts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(50), nullable=False, unique=True)
+    start_time = Column(String(10), nullable=False)
+    end_time = Column(String(10), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    schedules = relationship("Schedule", back_populates="work_shift")
+
+
+class Schedule(Base):
+    __tablename__ = "schedules"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    work_shift_id = Column(Integer, ForeignKey("work_shifts.id"), nullable=False)
+    schedule_date = Column(String(10), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User")
+    work_shift = relationship("WorkShift", back_populates="schedules")

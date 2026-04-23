@@ -437,3 +437,82 @@ class FinanceOrderItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class WorkShiftBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="班次名称")
+    start_time: str = Field(..., description="开始时间，格式: HH:MM")
+    end_time: str = Field(..., description="结束时间，格式: HH:MM")
+
+
+class WorkShiftCreate(WorkShiftBase):
+    pass
+
+
+class WorkShiftUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=50)
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class WorkShift(WorkShiftBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScheduleBase(BaseModel):
+    user_id: int = Field(..., description="员工ID")
+    work_shift_id: int = Field(..., description="班次ID")
+    schedule_date: str = Field(..., description="排班日期，格式: YYYY-MM-DD")
+
+
+class ScheduleCreate(ScheduleBase):
+    pass
+
+
+class ScheduleUpdate(BaseModel):
+    work_shift_id: Optional[int] = None
+
+
+class Schedule(ScheduleBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScheduleWithDetails(Schedule):
+    user: Optional[UserResponse] = None
+    work_shift: Optional[WorkShift] = None
+
+
+class BatchScheduleItem(BaseModel):
+    user_id: int = Field(..., description="员工ID")
+
+
+class BatchScheduleCreate(BaseModel):
+    user_ids: List[int] = Field(..., description="员工ID列表")
+    work_shift_id: int = Field(..., description="班次ID")
+    start_date: str = Field(..., description="开始日期，格式: YYYY-MM-DD")
+    end_date: str = Field(..., description="结束日期，格式: YYYY-MM-DD")
+    exclude_weekends: Optional[bool] = Field(False, description="是否排除周末")
+
+
+class BatchScheduleResponse(BaseModel):
+    success: bool
+    message: str
+    created_count: int = 0
+    conflict_dates: List[str] = []
+
+
+class ScheduleConflictCheck(BaseModel):
+    user_id: int
+    schedule_date: str
+    has_conflict: bool
+    existing_schedule: Optional[ScheduleWithDetails] = None
