@@ -21,11 +21,22 @@ security = HTTPBearer()
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        import hashlib
+        import hmac
+        simple_hash = hashlib.sha256(plain_password.encode('utf-8')).hexdigest()
+        return hmac.compare_digest(simple_hash, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except Exception as e:
+        print(f"[警告] bcrypt 哈希失败，使用备用哈希方式: {e}")
+        import hashlib
+        return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
