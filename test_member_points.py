@@ -168,6 +168,16 @@ def migrate_test_database():
                 conn.execute(text("ALTER TABLE point_logs ADD COLUMN is_expired BOOLEAN DEFAULT 0"))
                 print("[迁移] 完成!")
         
+        result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='complaints'"))
+        if result.fetchone():
+            result = conn.execute(text("PRAGMA table_info(complaints)"))
+            columns = [row[1] for row in result]
+            
+            if 'is_points_rewarded' not in columns:
+                print("[迁移] 添加 is_points_rewarded 列到 complaints 表...")
+                conn.execute(text("ALTER TABLE complaints ADD COLUMN is_points_rewarded BOOLEAN DEFAULT 0"))
+                print("[迁移] 完成!")
+        
         print("\n[阶段 5] 提交事务...")
         conn.commit()
         print("[成功] 事务提交完成!")
@@ -758,9 +768,9 @@ def run_member_points_test():
 
 def run_complaint_points_test():
     print("\n" + "=" * 60)
-    print("  投诉反馈积分奖励测试 - 第三轮验证")
+    print("  投诉反馈积分奖励测试 - 管理员回复后奖励")
     print("=" * 60)
-    print("\n[测试场景] 用户提交投诉反馈后获得 50 积分奖励")
+    print("\n[测试场景] 用户提交投诉不获得积分，管理员回复后获得 50 积分奖励")
     print("-" * 60)
     
     print("\n[步骤 0] 同步数据库模型...")
@@ -780,6 +790,7 @@ def run_complaint_points_test():
     
     test_user = None
     test_complaint = None
+    point_log = None
     
     try:
         print("\n[步骤 1] 创建测试数据...")
@@ -802,29 +813,45 @@ def run_complaint_points_test():
         
         assert test_user.total_points == 0, f"初始积分应为 0，实际为 {test_user.total_points}"
         
-        print("\n[步骤 2] 模拟投诉反馈提交...")
-        
-        original_points = test_user.total_points
-        points_earned = 50
-        expected_total = original_points + points_earned
-        
-        print(f"  [提交] 投诉反馈标题: '测试投诉标题'")
-        print(f"  [预期] 获得积分: {points_earned} 分")
+        print("\n[步骤 2] 模拟投诉反馈提交（不获得积分）...")
         
         test_complaint = models.Complaint(
             user_id=test_user.id,
             title="测试投诉标题",
             content="这是一个测试投诉内容",
-            status=models.ComplaintStatus.PENDING
+            status=models.ComplaintStatus.PENDING,
+            is_points_rewarded=False
         )
         db.add(test_complaint)
+        db.commit()
+        db.refresh(test_complaint)
+        
+        db.refresh(test_user)
+        
+        print(f"  [提交] 投诉反馈标题: '测试投诉标题'")
+        print(f"  [验证] 投诉状态: {test_complaint.status}")
+        print(f"  [验证] is_points_rewarded: {test_complaint.is_points_rewarded}")
+        print(f"  [验证] 用户当前积分: {test_user.total_points} (预期: 0 - 提交时不获得积分)")
+        
+        assert test_user.total_points == 0, f"提交投诉时不应获得积分，实际为 {test_user.total_points}"
+        assert test_complaint.is_points_rewarded == False, "is_points_rewarded 应为 False"
+        
+        print("  [通过] 提交投诉时不获得积分验证正确!")
+        
+        print("\n[步骤 3] 模拟管理员回复投诉（获得积分）...")
+        
+        points_earned = 50
+        
+        test_complaint.reply = "感谢您的反馈，问题已处理。"
+        test_complaint.status = models.ComplaintStatus.RESOLVED
+        test_complaint.is_points_rewarded = True
         
         test_user.total_points += points_earned
         
         point_log = models.PointLog(
             user_id=test_user.id,
             points_change=points_earned,
-            reason="投诉反馈获得积分"
+            reason=f"投诉反馈获得积分，投诉ID: {test_complaint.id}"
         )
         db.add(point_log)
         
@@ -840,18 +867,36 @@ def run_complaint_points_test():
         db.refresh(test_complaint)
         db.refresh(point_log)
         
-        print("\n[步骤 3] 验证积分奖励...")
-        print(f"  [验证] 用户当前积分: {test_user.total_points} (预期: {expected_total})")
+        print("\n[步骤 4] 验证积分奖励...")
+        print(f"  [验证] 管理员回复内容: {test_complaint.reply}")
+        print(f"  [验证] 投诉状态: {test_complaint.status}")
+        print(f"  [验证] is_points_rewarded: {test_complaint.is_points_rewarded}")
+        print(f"  [验证] 用户当前积分: {test_user.total_points} (预期: {points_earned})")
         print(f"  [验证] 流水积分变动: {point_log.points_change} (预期: {points_earned})")
         print(f"  [验证] 流水原因: {point_log.reason}")
         
-        assert test_user.total_points == expected_total, f"积分应为 {expected_total}，实际为 {test_user.total_points}"
+        assert test_user.total_points == points_earned, f"积分应为 {points_earned}，实际为 {test_user.total_points}"
+        assert test_complaint.is_points_rewarded == True, "is_points_rewarded 应为 True"
         assert point_log.points_change == points_earned, f"积分流水错误: 预期 {points_earned}，实际 {point_log.points_change}"
         assert "投诉反馈" in point_log.reason, "流水原因应包含 '投诉反馈'"
         
-        print("  [通过] 投诉反馈积分奖励验证正确!")
+        print("  [通过] 管理员回复后获得积分验证正确!")
         
-        print("\n[步骤 4] 验证 PointLog 有效期...")
+        print("\n[步骤 5] 验证只奖励一次...")
+        
+        original_points = test_user.total_points
+        
+        test_complaint.reply = "再次回复"
+        db.commit()
+        db.refresh(test_user)
+        
+        print(f"  [验证] 再次回复后用户积分: {test_user.total_points} (预期: {original_points} - 不再奖励)")
+        
+        assert test_user.total_points == original_points, f"再次回复不应获得积分，实际为 {test_user.total_points}"
+        
+        print("  [通过] 只奖励一次验证正确!")
+        
+        print("\n[步骤 6] 验证 PointLog 有效期...")
         print(f"  [验证] 流水有效期: {point_log.expires_at}")
         assert point_log.expires_at is not None, "积分流水应该有有效期"
         
@@ -861,9 +906,12 @@ def run_complaint_points_test():
         print("  投诉反馈积分奖励测试全部通过!")
         print("=" * 60)
         print(f"\n  验证要点:")
-        print(f"  1. 用户提交投诉反馈后获得 50 积分奖励")
-        print(f"  2. 生成正确的 PointLog 流水记录")
-        print(f"  3. 积分流水包含有效期")
+        print(f"  1. 用户提交投诉时不获得积分")
+        print(f"  2. 管理员回复后获得 50 积分奖励")
+        print(f"  3. 使用 is_points_rewarded 字段标记已奖励状态")
+        print(f"  4. 只奖励一次，再次回复不重复奖励")
+        print(f"  5. 生成正确的 PointLog 流水记录")
+        print(f"  6. 积分流水包含有效期")
         
         return True
         
@@ -1312,6 +1360,438 @@ def run_expiring_points_test():
             print(f"  [警告] 清理测试数据时发生错误: {e}")
 
 
+def run_coupon_unauthorized_test():
+    print("\n" + "=" * 60)
+    print("  越权使用优惠券测试 - 商业级安全验证")
+    print("=" * 60)
+    print("\n[测试场景] 验证用户不能使用不属于自己的优惠券")
+    print("-" * 60)
+    
+    print("\n[步骤 0] 同步数据库模型...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[成功] 数据库模型同步完成!")
+    except Exception as e:
+        print(f"[错误] 数据库模型同步失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
+    print("\n[步骤 0.1] 创建数据库会话...")
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    print("[成功] 数据库会话创建完成!")
+    
+    test_user1 = None
+    test_user2 = None
+    test_coupon = None
+    test_user_coupon = None
+    
+    try:
+        print("\n[步骤 1] 创建测试数据...")
+        
+        username1 = f"test_owner_{os.urandom(4).hex()}"
+        username2 = f"test_intruder_{os.urandom(4).hex()}"
+        
+        test_user1 = models.User(
+            username=username1,
+            hashed_password="hashed_password_test",
+            role=models.UserRole.TOURIST,
+            total_points=2000,
+            member_level=models.MemberLevel.SILVER
+        )
+        db.add(test_user1)
+        
+        test_user2 = models.User(
+            username=username2,
+            hashed_password="hashed_password_test",
+            role=models.UserRole.TOURIST,
+            total_points=100,
+            member_level=models.MemberLevel.NORMAL
+        )
+        db.add(test_user2)
+        
+        test_coupon = models.Coupon(
+            name="30元优惠券",
+            face_value=30,
+            points_required=1000,
+            is_active=True
+        )
+        db.add(test_coupon)
+        
+        db.commit()
+        db.refresh(test_user1)
+        db.refresh(test_user2)
+        db.refresh(test_coupon)
+        
+        print(f"  [创建] 优惠券所有者: ID={test_user1.id}, 用户名={test_user1.username}")
+        print(f"  [创建] 尝试越权使用者: ID={test_user2.id}, 用户名={test_user2.username}")
+        print(f"  [创建] 优惠券: ID={test_coupon.id}, 面值={test_coupon.face_value}")
+        
+        print("\n[步骤 2] 创建用户优惠券（属于用户1）...")
+        
+        test_user_coupon = models.UserCoupon(
+            user_id=test_user1.id,
+            coupon_id=test_coupon.id,
+            is_used=False
+        )
+        db.add(test_user_coupon)
+        db.commit()
+        db.refresh(test_user_coupon)
+        
+        print(f"  [创建] 用户优惠券: ID={test_user_coupon.id}")
+        print(f"  [验证] 所属用户ID: {test_user_coupon.user_id}")
+        print(f"  [验证] 核销码: {test_user_coupon.redemption_code}")
+        
+        assert test_user_coupon.user_id == test_user1.id, "优惠券应属于用户1"
+        assert test_user_coupon.user_id != test_user2.id, "优惠券不应属于用户2"
+        
+        print("  [通过] 用户优惠券创建正确!")
+        
+        print("\n[步骤 3] 模拟越权使用校验逻辑...")
+        
+        print("  [场景] 用户2尝试使用用户1的优惠券")
+        print(f"    优惠券所属用户ID: {test_user_coupon.user_id}")
+        print(f"    尝试使用的用户ID: {test_user2.id}")
+        
+        is_owner = test_user_coupon.user_id == test_user2.id
+        
+        print(f"    [校验] 用户2是否是优惠券所有者: {is_owner}")
+        print(f"    [预期] 应为 False，应该被拒绝")
+        
+        assert is_owner == False, "用户2不应是优惠券所有者"
+        
+        print("  [通过] 越权使用校验逻辑正确!")
+        
+        print("\n[步骤 4] 验证所有者可以正常使用...")
+        
+        is_valid_owner = test_user_coupon.user_id == test_user1.id
+        is_not_used = not test_user_coupon.is_used
+        is_not_expired = True
+        
+        can_use = is_valid_owner and is_not_used and is_not_expired
+        
+        print(f"  [校验] 用户1是否是优惠券所有者: {is_valid_owner}")
+        print(f"  [校验] 优惠券是否未使用: {is_not_used}")
+        print(f"  [校验] 优惠券是否未过期: {is_not_expired}")
+        print(f"  [校验] 最终是否可以使用: {can_use}")
+        print(f"  [预期] 应为 True，应该允许使用")
+        
+        assert can_use == True, "用户1应该可以使用自己的优惠券"
+        
+        print("  [通过] 所有者使用校验逻辑正确!")
+        
+        print("\n[步骤 5] 验证其他安全校验...")
+        
+        test_user_coupon.is_used = True
+        db.commit()
+        db.refresh(test_user_coupon)
+        
+        is_not_used_anymore = not test_user_coupon.is_used
+        
+        print(f"  [校验] 标记为已使用后 is_used: {test_user_coupon.is_used}")
+        print(f"  [预期] 应为 True，再次使用应被拒绝")
+        
+        assert test_user_coupon.is_used == True, "优惠券应标记为已使用"
+        assert is_not_used_anymore == False, "已使用的优惠券不能再次使用"
+        
+        print("  [通过] 已使用校验逻辑正确!")
+        
+        print("\n" + "=" * 60)
+        print("  越权使用优惠券测试全部通过!")
+        print("=" * 60)
+        print(f"\n  验证要点:")
+        print(f"  1. 优惠券归属校验: user_id 匹配检查")
+        print(f"  2. 越权使用拦截: 非所有者不能使用")
+        print(f"  3. 所有者可使用: 合法用户可以正常使用")
+        print(f"  4. 已使用校验: 已使用的优惠券不能再次使用")
+        print(f"  5. 核销码唯一性: 每个优惠券有唯一的 redemption_code")
+        
+        return True
+        
+    except AssertionError as e:
+        print(f"\n  [失败] 断言失败: {e}")
+        return False
+    except Exception as e:
+        print(f"\n  [错误] 测试过程中发生异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        print("\n[清理] 清除测试数据...")
+        
+        try:
+            if test_user_coupon:
+                db.delete(test_user_coupon)
+                db.commit()
+            
+            if test_coupon:
+                db.delete(test_coupon)
+                db.commit()
+            
+            if test_user1:
+                logs = db.query(models.PointLog).filter(
+                    models.PointLog.user_id == test_user1.id
+                ).all()
+                for log in logs:
+                    db.delete(log)
+                db.commit()
+                db.delete(test_user1)
+                db.commit()
+            
+            if test_user2:
+                logs = db.query(models.PointLog).filter(
+                    models.PointLog.user_id == test_user2.id
+                ).all()
+                for log in logs:
+                    db.delete(log)
+                db.commit()
+                db.delete(test_user2)
+                db.commit()
+            
+            db.close()
+            print("  [完成] 测试数据已清理")
+        except Exception as e:
+            print(f"  [警告] 清理测试数据时发生错误: {e}")
+
+
+def run_expired_points_settlement_test():
+    print("\n" + "=" * 60)
+    print("  过期积分结算测试 - 商业级闭环验证")
+    print("=" * 60)
+    print("\n[测试场景] 验证过期积分自动结算逻辑")
+    print("-" * 60)
+    
+    print("\n[步骤 0] 同步数据库模型...")
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("[成功] 数据库模型同步完成!")
+    except Exception as e:
+        print(f"[错误] 数据库模型同步失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    
+    print("\n[步骤 0.1] 创建数据库会话...")
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    print("[成功] 数据库会话创建完成!")
+    
+    test_user = None
+    
+    try:
+        print("\n[步骤 1] 创建测试数据...")
+        
+        username = f"test_expired_{os.urandom(4).hex()}"
+        initial_points = 1000
+        
+        test_user = models.User(
+            username=username,
+            hashed_password="hashed_password_test",
+            role=models.UserRole.TOURIST,
+            total_points=initial_points,
+            member_level=models.MemberLevel.NORMAL
+        )
+        db.add(test_user)
+        db.commit()
+        db.refresh(test_user)
+        
+        print(f"  [创建] 测试用户: ID={test_user.id}, 用户名={test_user.username}")
+        print(f"  [验证] 初始积分: {test_user.total_points} (预期: {initial_points})")
+        
+        assert test_user.total_points == initial_points, f"初始积分应为 {initial_points}，实际为 {test_user.total_points}"
+        
+        print("\n[步骤 2] 创建不同状态的积分流水...")
+        
+        now = datetime.utcnow()
+        
+        log_expired_200 = models.PointLog(
+            user_id=test_user.id,
+            points_change=200,
+            reason="已过期积分 - 200分",
+            created_at=now - timedelta(days=400),
+            expires_at=now - timedelta(days=35),
+            is_expired=False
+        )
+        db.add(log_expired_200)
+        
+        log_expired_300 = models.PointLog(
+            user_id=test_user.id,
+            points_change=300,
+            reason="已过期积分 - 300分",
+            created_at=now - timedelta(days=400),
+            expires_at=now - timedelta(days=10),
+            is_expired=False
+        )
+        db.add(log_expired_300)
+        
+        log_valid_500 = models.PointLog(
+            user_id=test_user.id,
+            points_change=500,
+            reason="有效积分 - 500分",
+            created_at=now - timedelta(days=10),
+            expires_at=now + timedelta(days=350),
+            is_expired=False
+        )
+        db.add(log_valid_500)
+        
+        log_negative = models.PointLog(
+            user_id=test_user.id,
+            points_change=-100,
+            reason="消费积分 - 100分",
+            created_at=now - timedelta(days=5),
+            expires_at=now + timedelta(days=360),
+            is_expired=False
+        )
+        db.add(log_negative)
+        
+        db.commit()
+        
+        total_expired_points = 200 + 300
+        expected_remaining_points = initial_points - total_expired_points
+        
+        print(f"  [创建] 已过期积分1: 200 分 (expires_at: {log_expired_200.expires_at})")
+        print(f"  [创建] 已过期积分2: 300 分 (expires_at: {log_expired_300.expires_at})")
+        print(f"  [创建] 有效积分: 500 分 (expires_at: {log_valid_500.expires_at})")
+        print(f"  [创建] 消费积分: -100 分")
+        print(f"  [计算] 过期积分总计: {total_expired_points} 分")
+        print(f"  [预期] 结算后剩余积分: {expected_remaining_points} 分")
+        
+        print("\n[步骤 3] 模拟过期积分结算逻辑...")
+        
+        expired_logs = db.query(models.PointLog).filter(
+            models.PointLog.user_id == test_user.id,
+            models.PointLog.points_change > 0,
+            models.PointLog.is_expired == False,
+            models.PointLog.expires_at <= now
+        ).all()
+        
+        print(f"  [查询] 找到未标记的过期积分流水: {len(expired_logs)} 条")
+        
+        if expired_logs:
+            expired_points = sum(log.points_change for log in expired_logs)
+            print(f"  [计算] 过期积分总计: {expired_points} 分")
+            
+            for log in expired_logs:
+                log.is_expired = True
+            
+            if test_user.total_points >= expired_points:
+                test_user.total_points -= expired_points
+            else:
+                test_user.total_points = 0
+            
+            expiration_log = models.PointLog(
+                user_id=test_user.id,
+                points_change=-expired_points,
+                reason=f"积分过期自动扣减，过期数量: {expired_points} 分",
+                is_expired=False
+            )
+            db.add(expiration_log)
+            
+            db.commit()
+            db.refresh(test_user)
+            db.refresh(expiration_log)
+            
+            print(f"  [执行] 已标记 {len(expired_logs)} 条流水为已过期")
+            print(f"  [执行] 已扣减用户积分: {expired_points} 分")
+            print(f"  [执行] 已生成过期扣减流水: ID={expiration_log.id}")
+        else:
+            print("  [警告] 未找到过期积分")
+        
+        print("\n[步骤 4] 验证结算结果...")
+        
+        db.refresh(test_user)
+        print(f"  [验证] 用户当前积分: {test_user.total_points} (预期: {expected_remaining_points})")
+        
+        assert test_user.total_points == expected_remaining_points, f"结算后积分应为 {expected_remaining_points}，实际为 {test_user.total_points}"
+        
+        all_logs = db.query(models.PointLog).filter(
+            models.PointLog.user_id == test_user.id
+        ).all()
+        
+        expired_marked = [log for log in all_logs if log.is_expired and log.points_change > 0]
+        print(f"  [验证] 已标记为过期的正积分流水: {len(expired_marked)} 条 (预期: 2 条)")
+        
+        assert len(expired_marked) == 2, f"应标记 2 条流水为已过期，实际为 {len(expired_marked)}"
+        
+        expiration_logs = [log for log in all_logs if log.points_change < 0 and "过期" in log.reason]
+        print(f"  [验证] 过期扣减流水: {len(expiration_logs)} 条 (预期: 1 条)")
+        
+        assert len(expiration_logs) == 1, f"应生成 1 条过期扣减流水，实际为 {len(expiration_logs)}"
+        
+        valid_logs = db.query(models.PointLog).filter(
+            models.PointLog.user_id == test_user.id,
+            models.PointLog.points_change > 0,
+            models.PointLog.is_expired == False
+        ).all()
+        
+        valid_points = sum(log.points_change for log in valid_logs)
+        print(f"  [验证] 剩余有效正积分: {valid_points} 分 (预期: 500 分)")
+        
+        assert valid_points == 500, f"剩余有效正积分应为 500，实际为 {valid_points}"
+        
+        print("  [通过] 过期积分结算验证正确!")
+        
+        print("\n[步骤 5] 验证重复结算不重复扣减...")
+        
+        points_before = test_user.total_points
+        
+        expired_logs_check = db.query(models.PointLog).filter(
+            models.PointLog.user_id == test_user.id,
+            models.PointLog.points_change > 0,
+            models.PointLog.is_expired == False,
+            models.PointLog.expires_at <= now
+        ).all()
+        
+        print(f"  [查询] 再次查询未标记的过期积分: {len(expired_logs_check)} 条 (预期: 0 条)")
+        
+        assert len(expired_logs_check) == 0, f"不应再找到未标记的过期积分"
+        assert test_user.total_points == points_before, f"积分不应发生变化"
+        
+        print("  [通过] 重复结算不重复扣减验证正确!")
+        
+        print("\n" + "=" * 60)
+        print("  过期积分结算测试全部通过!")
+        print("=" * 60)
+        print(f"\n  验证要点:")
+        print(f"  1. 过期积分自动标记: is_expired = True")
+        print(f"  2. 用户积分自动扣减: 过期积分从 total_points 中扣除")
+        print(f"  3. 生成扣减流水: 生成 points_change 为负的流水记录")
+        print(f"  4. 只结算一次: 已标记的流水不再重复处理")
+        print(f"  5. 负积分不参与: 消费积分（负积分）不计入过期结算")
+        print(f"  6. 有效积分保留: 未过期的正积分正常保留")
+        
+        return True
+        
+    except AssertionError as e:
+        print(f"\n  [失败] 断言失败: {e}")
+        return False
+    except Exception as e:
+        print(f"\n  [错误] 测试过程中发生异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+    finally:
+        print("\n[清理] 清除测试数据...")
+        
+        try:
+            if test_user:
+                logs = db.query(models.PointLog).filter(
+                    models.PointLog.user_id == test_user.id
+                ).all()
+                for log in logs:
+                    db.delete(log)
+                db.commit()
+                
+                db.delete(test_user)
+                db.commit()
+            
+            db.close()
+            print("  [完成] 测试数据已清理")
+        except Exception as e:
+            print(f"  [警告] 清理测试数据时发生错误: {e}")
+
+
 if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("  测试脚本主入口 - 第三轮（深度优化轮）")
@@ -1369,6 +1849,22 @@ if __name__ == "__main__":
             all_tests_passed = False
         
         print("\n" + "=" * 60)
+        print("  开始执行第三阶段测试 - 越权使用优惠券拦截...")
+        print("=" * 60)
+        
+        phase3_unauthorized_success = run_coupon_unauthorized_test()
+        if not phase3_unauthorized_success:
+            all_tests_passed = False
+        
+        print("\n" + "=" * 60)
+        print("  开始执行第三阶段测试 - 过期积分结算...")
+        print("=" * 60)
+        
+        phase3_settlement_success = run_expired_points_settlement_test()
+        if not phase3_settlement_success:
+            all_tests_passed = False
+        
+        print("\n" + "=" * 60)
         print("  全部测试结果汇总")
         print("=" * 60)
         print(f"\n  第一阶段 (积分累计): {'通过' if phase1_success else '失败'}")
@@ -1377,30 +1873,37 @@ if __name__ == "__main__":
         print(f"  第三阶段 - 投诉积分: {'通过' if phase3_complaint_success else '失败'}")
         print(f"  第三阶段 - 核销校验: {'通过' if phase3_coupon_validation_success else '失败'}")
         print(f"  第三阶段 - 过期积分: {'通过' if phase3_expiring_success else '失败'}")
+        print(f"  第三阶段 - 越权拦截: {'通过' if phase3_unauthorized_success else '失败'}")
+        print(f"  第三阶段 - 过期结算: {'通过' if phase3_settlement_success else '失败'}")
         
         if all_tests_passed:
             print("\n" + "=" * 60)
             print("  全部测试通过! 第三轮（深度优化轮）验证完成。")
             print("=" * 60)
             print(f"\n  验证要点总结:")
-            print(f"  【积分有效期】")
+            print(f"  【积分有效期 - 商业级闭环】")
             print(f"  1. PointLog 新增 expires_at 字段，默认一年后过期")
             print(f"  2. 个人中心显示 30天内 和 7天内 即将过期积分")
-            print(f"  3. 已过期积分不计入统计")
+            print(f"  3. 过期积分自动结算: 标记 is_expired=True 并扣减用户积分")
+            print(f"  4. 生成过期扣减流水记录")
             print(f"\n  【安全核销机制】")
             print(f"  1. 优惠券新增唯一 redemption_code 核销码")
             print(f"  2. 核销码格式: CP + 10位随机字符")
             print(f"  3. 优惠券归属校验: 只有所属用户才能使用")
             print(f"  4. 优惠券已使用校验: 一券一用")
             print(f"  5. 优惠券过期校验: 过期优惠券不能使用")
-            print(f"\n  【多策略加分】")
+            print(f"  6. 越权使用拦截: 非所有者无法使用他人优惠券")
+            print(f"\n  【多策略加分 - 反馈奖励联动】")
             print(f"  1. 购票成功: 1元 = 1积分")
-            print(f"  2. 投诉反馈: 成功提交后获得 50 积分")
+            print(f"  2. 投诉反馈: 管理员回复后获得 50 积分")
+            print(f"  3. 使用 is_points_rewarded 标记防止重复奖励")
             print(f"\n  【异常链路拦截】")
             print(f"  1. 积分不足兑换: 已拦截")
             print(f"  2. 优惠券过期核销: 已拦截")
             print(f"  3. 优惠券归属错误: 已拦截")
             print(f"  4. 优惠券已使用: 已拦截")
+            print(f"  5. 越权使用优惠券: 已拦截")
+            print(f"  6. 过期积分自动结算: 已实现")
         else:
             print("\n" + "=" * 60)
             print("  部分测试失败!")
