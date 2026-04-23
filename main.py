@@ -207,6 +207,21 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN remained_inventory INTEGER DEFAULT 100"))
                 print("[迁移] 完成!")
             
+            if 'latitude' not in columns:
+                print("[迁移] 添加 latitude 列到 scenic_spots 表...")
+                conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN latitude FLOAT"))
+                print("[迁移] 完成!")
+            
+            if 'longitude' not in columns:
+                print("[迁移] 添加 longitude 列到 scenic_spots 表...")
+                conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN longitude FLOAT"))
+                print("[迁移] 完成!")
+            
+            if 'geofence_radius' not in columns:
+                print("[迁移] 添加 geofence_radius 列到 scenic_spots 表...")
+                conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN geofence_radius FLOAT"))
+                print("[迁移] 完成!")
+            
             result = conn.execute(text("PRAGMA table_info(users)"))
             columns = [row[1] for row in result]
             
@@ -305,6 +320,24 @@ def migrate_database():
                     print("[迁移] 添加 is_points_rewarded 列到 complaints 表...")
                     conn.execute(text("ALTER TABLE complaints ADD COLUMN is_points_rewarded BOOLEAN DEFAULT 0"))
                     print("[迁移] 完成!")
+            
+            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='financial_logs'"))
+            if not result.fetchone():
+                print("[迁移] 创建 financial_logs 表...")
+                conn.execute(text("""
+                    CREATE TABLE financial_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        transaction_type VARCHAR(20) NOT NULL,
+                        order_no VARCHAR(36),
+                        amount FLOAT NOT NULL,
+                        transaction_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        summary VARCHAR(500),
+                        related_distributor_id INTEGER,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (related_distributor_id) REFERENCES distributors (id)
+                    )
+                """))
+                print("[迁移] 完成!")
             
             conn.commit()
         except Exception as e:
@@ -1033,6 +1066,40 @@ def purchase_ticket(
             tourist_id=order_data.user_id,
             quantity=points_earned
         )
+        
+        income_log = models.FinancialLog(
+            transaction_type=models.TransactionType.INCOME,
+            order_no=order.order_no,
+            amount=total_price,
+            transaction_time=datetime.utcnow(),
+            summary=f"门票销售收入，订单号: {order.order_no}, 景点ID: {order_data.scenic_spot_id}, 数量: {order_data.quantity}"
+        )
+        db.add(income_log)
+        
+        log_info(
+            message=f"财务流水已记录: 收入 +{total_price} 元, 订单号: {order.order_no}",
+            action="FINANCIAL_LOG_INCOME",
+            order_id=order.order_no,
+            scenic_spot_id=order_data.scenic_spot_id
+        )
+        
+        if distributor and commission_amount > 0:
+            distribution_expense_log = models.FinancialLog(
+                transaction_type=models.TransactionType.DISTRIBUTION_EXPENSE,
+                order_no=order.order_no,
+                amount=commission_amount,
+                transaction_time=datetime.utcnow(),
+                summary=f"分销佣金支出，订单号: {order.order_no}, 分销商ID: {distributor.id}, 佣金比例: {distributor.commission_rate * 100}%",
+                related_distributor_id=distributor.id
+            )
+            db.add(distribution_expense_log)
+            
+            log_info(
+                message=f"财务流水已记录: 分销支出 -{commission_amount} 元, 订单号: {order.order_no}, 分销商ID: {distributor.id}",
+                action="FINANCIAL_LOG_DISTRIBUTION_EXPENSE",
+                order_id=order.order_no,
+                tourist_id=distributor.id
+            )
         
         db.commit()
         db.refresh(order)
@@ -3029,6 +3096,186 @@ def get_attendance_record(
     return record
 
 
+finance_router = APIRouter(prefix="/finance", tags=["财务核算与对账中心"])
+
+
+@finance_router.get("/statistics", response_model=schemas.FinanceStatistics)
+def get_finance_statistics(
+    start_date: Optional[str] = Query(None, description="开始日期，格式: YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期，格式: YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from sqlalchemy import func
+    from datetime import datetime
+    
+    query = db.query(models.FinancialLog)
+    
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            start_dt = start_dt.replace(hour=0, minute=0, second=0)
+            query = query.filter(models.FinancialLog.transaction_time >= start_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="开始日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
+    
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            end_dt = end_dt.replace(hour=23, minute=59, second=59)
+            query = query.filter(models.FinancialLog.transaction_time <= end_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="结束日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
+    
+    total_income = query.filter(
+        models.FinancialLog.transaction_type == models.TransactionType.INCOME
+    ).with_entities(func.sum(models.FinancialLog.amount)).scalar() or 0.0
+    
+    total_distribution_expense = query.filter(
+        models.FinancialLog.transaction_type == models.TransactionType.DISTRIBUTION_EXPENSE
+    ).with_entities(func.sum(models.FinancialLog.amount)).scalar() or 0.0
+    
+    total_refund = query.filter(
+        models.FinancialLog.transaction_type == models.TransactionType.REFUND
+    ).with_entities(func.sum(models.FinancialLog.amount)).scalar() or 0.0
+    
+    total_transactions = query.count()
+    
+    net_profit = total_income - total_distribution_expense - total_refund
+    
+    log_info(
+        message=f"财务统计查询: 总收入={total_income}, 总分销支出={total_distribution_expense}, 净利润={net_profit}",
+        action="FINANCE_STATISTICS_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.FinanceStatistics(
+        total_income=round(total_income, 2),
+        total_distribution_expense=round(total_distribution_expense, 2),
+        total_refund=round(total_refund, 2),
+        net_profit=round(net_profit, 2),
+        total_transactions=total_transactions
+    )
+
+
+@finance_router.get("/logs", response_model=schemas.FinanceListResponse)
+def get_financial_logs(
+    start_date: Optional[str] = Query(None, description="开始日期，格式: YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="结束日期，格式: YYYY-MM-DD"),
+    transaction_type: Optional[schemas.TransactionType] = Query(None, description="交易类型筛选"),
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="返回数量限制"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from sqlalchemy import func
+    from datetime import datetime
+    
+    query = db.query(models.FinancialLog)
+    
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            start_dt = start_dt.replace(hour=0, minute=0, second=0)
+            query = query.filter(models.FinancialLog.transaction_time >= start_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="开始日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
+    
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            end_dt = end_dt.replace(hour=23, minute=59, second=59)
+            query = query.filter(models.FinancialLog.transaction_time <= end_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="结束日期格式错误，请使用 YYYY-MM-DD 格式"
+            )
+    
+    if transaction_type:
+        query = query.filter(models.FinancialLog.transaction_type == transaction_type)
+    
+    total = query.count()
+    
+    logs = query.order_by(
+        models.FinancialLog.transaction_time.desc(),
+        models.FinancialLog.id.desc()
+    ).offset(skip).limit(limit).all()
+    
+    stats_query = db.query(models.FinancialLog)
+    
+    if start_date:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        start_dt = start_dt.replace(hour=0, minute=0, second=0)
+        stats_query = stats_query.filter(models.FinancialLog.transaction_time >= start_dt)
+    
+    if end_date:
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        end_dt = end_dt.replace(hour=23, minute=59, second=59)
+        stats_query = stats_query.filter(models.FinancialLog.transaction_time <= end_dt)
+    
+    total_income = stats_query.filter(
+        models.FinancialLog.transaction_type == models.TransactionType.INCOME
+    ).with_entities(func.sum(models.FinancialLog.amount)).scalar() or 0.0
+    
+    total_distribution_expense = stats_query.filter(
+        models.FinancialLog.transaction_type == models.TransactionType.DISTRIBUTION_EXPENSE
+    ).with_entities(func.sum(models.FinancialLog.amount)).scalar() or 0.0
+    
+    total_refund = stats_query.filter(
+        models.FinancialLog.transaction_type == models.TransactionType.REFUND
+    ).with_entities(func.sum(models.FinancialLog.amount)).scalar() or 0.0
+    
+    net_profit = total_income - total_distribution_expense - total_refund
+    
+    log_info(
+        message=f"财务流水查询: 共 {total} 条记录, 跳过 {skip}, 限制 {limit}",
+        action="FINANCE_LOGS_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.FinanceListResponse(
+        total=total,
+        items=logs,
+        statistics=schemas.FinanceStatistics(
+            total_income=round(total_income, 2),
+            total_distribution_expense=round(total_distribution_expense, 2),
+            total_refund=round(total_refund, 2),
+            net_profit=round(net_profit, 2),
+            total_transactions=total
+        )
+    )
+
+
+@finance_router.get("/logs/{log_id}", response_model=schemas.FinancialLogWithDetails)
+def get_financial_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    log = db.query(models.FinancialLog).filter(
+        models.FinancialLog.id == log_id
+    ).first()
+    
+    if log is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="财务流水记录不存在"
+        )
+    
+    return log
+
+
+app.include_router(finance_router)
 app.include_router(attendance_router)
 
 

@@ -312,3 +312,24 @@ class AttendanceRecord(Base):
     schedule = relationship("Schedule")
     scenic_spot = relationship("ScenicSpot")
     approver = relationship("User", foreign_keys=[approved_by])
+
+
+class TransactionType(str, Enum):
+    INCOME = "收入"
+    DISTRIBUTION_EXPENSE = "分销支出"
+    REFUND = "退款"
+
+
+class FinancialLog(Base):
+    __tablename__ = "financial_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    transaction_type = Column(SQLEnum(TransactionType), nullable=False, index=True)
+    order_no = Column(String(36), index=True, nullable=True)
+    amount = Column(Float, nullable=False)
+    transaction_time = Column(DateTime, default=datetime.utcnow, index=True)
+    summary = Column(String(500), nullable=True)
+    related_distributor_id = Column(Integer, ForeignKey("distributors.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    distributor = relationship("Distributor")
