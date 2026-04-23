@@ -122,6 +122,9 @@ class ScenicSpot(Base):
     name = Column(String(200), nullable=False)
     description = Column(Text)
     location = Column(String(200))
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    geofence_radius = Column(Float, nullable=True)
     rating = Column(Float, default=0.0)
     price = Column(Float, default=0.0)
     total_inventory = Column(Integer, default=100)
@@ -258,3 +261,54 @@ class Schedule(Base):
 
     user = relationship("User")
     work_shift = relationship("WorkShift", back_populates="schedules")
+
+
+class AttendanceLocationStatus(str, Enum):
+    NORMAL = "NORMAL"
+    OUT_OF_RANGE = "OUT_OF_RANGE"
+
+
+class AttendanceStatus(str, Enum):
+    NORMAL = "NORMAL"
+    LATE = "LATE"
+    EARLY_LEAVE = "EARLY_LEAVE"
+    ABSENT = "ABSENT"
+    MANUAL_APPROVED = "MANUAL_APPROVED"
+
+
+class AttendanceRecord(Base):
+    __tablename__ = "attendance_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=True)
+    scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=True)
+    
+    attendance_date = Column(String(10), nullable=False)
+    
+    check_in_time = Column(DateTime, nullable=True)
+    check_out_time = Column(DateTime, nullable=True)
+    
+    check_in_latitude = Column(Float, nullable=True)
+    check_in_longitude = Column(Float, nullable=True)
+    check_out_latitude = Column(Float, nullable=True)
+    check_out_longitude = Column(Float, nullable=True)
+    
+    check_in_location_status = Column(SQLEnum(AttendanceLocationStatus), default=AttendanceLocationStatus.NORMAL)
+    check_out_location_status = Column(SQLEnum(AttendanceLocationStatus), default=AttendanceLocationStatus.NORMAL)
+    
+    attendance_status = Column(SQLEnum(AttendanceStatus), default=AttendanceStatus.ABSENT)
+    
+    is_approved = Column(Boolean, default=False)
+    approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+    
+    remark = Column(String(500), nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+    schedule = relationship("Schedule")
+    scenic_spot = relationship("ScenicSpot")
+    approver = relationship("User", foreign_keys=[approved_by])

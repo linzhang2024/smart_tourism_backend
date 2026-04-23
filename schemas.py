@@ -544,3 +544,109 @@ class ScheduleConflictCheck(BaseModel):
     schedule_date: str
     has_conflict: bool
     existing_schedule: Optional[ScheduleWithDetails] = None
+
+
+class AttendanceLocationStatus(str, Enum):
+    NORMAL = "NORMAL"
+    OUT_OF_RANGE = "OUT_OF_RANGE"
+
+
+class AttendanceStatus(str, Enum):
+    NORMAL = "NORMAL"
+    LATE = "LATE"
+    EARLY_LEAVE = "EARLY_LEAVE"
+    ABSENT = "ABSENT"
+    MANUAL_APPROVED = "MANUAL_APPROVED"
+
+
+class CheckInCreate(BaseModel):
+    latitude: float = Field(..., description="打卡纬度")
+    longitude: float = Field(..., description="打卡经度")
+    scenic_spot_id: Optional[int] = Field(None, description="景点ID（可选）")
+
+
+class CheckOutCreate(BaseModel):
+    latitude: float = Field(..., description="打卡纬度")
+    longitude: float = Field(..., description="打卡经度")
+    scenic_spot_id: Optional[int] = Field(None, description="景点ID（可选）")
+
+
+class AttendanceManualApprove(BaseModel):
+    record_id: int = Field(..., description="考勤记录ID")
+    new_status: AttendanceStatus = Field(..., description="新的考勤状态")
+    remark: Optional[str] = Field(None, max_length=500, description="备注")
+
+
+class AttendanceRecordBase(BaseModel):
+    user_id: int
+    schedule_id: Optional[int] = None
+    scenic_spot_id: Optional[int] = None
+    attendance_date: str
+    check_in_time: Optional[datetime] = None
+    check_out_time: Optional[datetime] = None
+    check_in_latitude: Optional[float] = None
+    check_in_longitude: Optional[float] = None
+    check_out_latitude: Optional[float] = None
+    check_out_longitude: Optional[float] = None
+    check_in_location_status: AttendanceLocationStatus = AttendanceLocationStatus.NORMAL
+    check_out_location_status: AttendanceLocationStatus = AttendanceLocationStatus.NORMAL
+    attendance_status: AttendanceStatus = AttendanceStatus.ABSENT
+    is_approved: bool = False
+    remark: Optional[str] = None
+
+
+class AttendanceRecord(AttendanceRecordBase):
+    id: int
+    approved_by: Optional[int] = None
+    approved_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class AttendanceRecordWithDetails(AttendanceRecord):
+    user: Optional[UserResponse] = None
+    schedule: Optional[Schedule] = None
+    scenic_spot: Optional[ScenicSpot] = None
+    approver: Optional[UserResponse] = None
+
+
+class AttendanceAlertResponse(BaseModel):
+    record_id: int
+    user_id: int
+    username: str
+    attendance_date: str
+    attendance_status: AttendanceStatus
+    check_in_location_status: AttendanceLocationStatus
+    check_out_location_status: AttendanceLocationStatus
+    check_in_time: Optional[datetime] = None
+    check_out_time: Optional[datetime] = None
+    is_approved: bool
+    remark: Optional[str] = None
+
+
+class ScenicSpotUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    geofence_radius: Optional[float] = Field(None, ge=0, description="地理围栏半径（米）")
+    rating: Optional[float] = Field(None, ge=0, le=5)
+    price: Optional[float] = Field(None, ge=0)
+    total_inventory: Optional[int] = Field(None, ge=0)
+    remained_inventory: Optional[int] = Field(None, ge=0)
+
+
+class ScenicSpotWithGeofence(ScenicSpotBase):
+    id: int
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    geofence_radius: Optional[float] = None
+    is_active: bool = True
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

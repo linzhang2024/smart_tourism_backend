@@ -2473,6 +2473,279 @@
             box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
         }
 
+        .alert-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #ff4444, #ff6b6b);
+            color: #ffffff;
+            margin-left: 8px;
+        }
+
+        .alerts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .alert-card {
+            background: rgba(10, 10, 26, 0.5);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            border-left: 4px solid #ff4444;
+            transition: all 0.3s ease;
+        }
+
+        .alert-card:hover {
+            border-color: rgba(255, 68, 68, 0.5);
+            transform: translateX(2px);
+        }
+
+        .alert-card.status-late {
+            border-left-color: #ffd700;
+            border-color: rgba(255, 215, 0, 0.3);
+        }
+
+        .alert-card.status-late:hover {
+            border-color: rgba(255, 215, 0, 0.5);
+        }
+
+        .alert-card.status-early {
+            border-left-color: #ff9500;
+            border-color: rgba(255, 149, 0, 0.3);
+        }
+
+        .alert-card.status-early:hover {
+            border-color: rgba(255, 149, 0, 0.5);
+        }
+
+        .alert-card.status-location {
+            border-left-color: #ff4444;
+            border-color: rgba(255, 68, 68, 0.3);
+        }
+
+        .alert-card.approved {
+            border-left-color: #00ff88;
+            border-color: rgba(0, 255, 136, 0.3);
+            opacity: 0.7;
+        }
+
+        .alert-card.approved:hover {
+            opacity: 0.9;
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .alert-user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5cf6, #00d2ff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .alert-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .alert-date {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .alert-status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .alert-status-badge.status-late {
+            background: rgba(255, 215, 0, 0.2);
+            color: #ffd700;
+        }
+
+        .alert-status-badge.status-early {
+            background: rgba(255, 149, 0, 0.2);
+            color: #ff9500;
+        }
+
+        .alert-status-badge.status-location {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+        }
+
+        .alert-status-badge.status-absent {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+        }
+
+        .alert-status-badge.status-approved {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+        }
+
+        .alert-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .alert-detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .alert-detail-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .alert-detail-value {
+            font-size: 0.95rem;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .alert-detail-value.abnormal {
+            color: #ff4444;
+        }
+
+        .alert-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn-alert-action {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-approve {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .btn-approve:hover {
+            background: rgba(0, 255, 136, 0.3);
+        }
+
+        .btn-remark {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-remark:hover {
+            background: rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-view {
+            background: rgba(0, 210, 255, 0.2);
+            color: #00d2ff;
+            border: 1px solid rgba(0, 210, 255, 0.3);
+        }
+
+        .btn-view:hover {
+            background: rgba(0, 210, 255, 0.3);
+        }
+
+        .empty-alerts {
+            text-align: center;
+            padding: 60px 20px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .empty-alerts .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .approve-modal .modal {
+            max-width: 500px;
+        }
+
+        .approve-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .approve-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(10, 10, 26, 0.5);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .approve-option:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .approve-option.selected {
+            border-color: rgba(0, 255, 136, 0.5);
+            background: rgba(0, 255, 136, 0.1);
+        }
+
+        .approve-option input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .approve-option label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
         @media (max-width: 768px) {
             .attendance-tab-button {
                 padding: 10px 16px;
@@ -2860,6 +3133,7 @@
                     <button type="button" class="attendance-tab-button active" data-attendance-tab="shifts">班次管理</button>
                     <button type="button" class="attendance-tab-button" data-attendance-tab="schedule">排班表</button>
                     <button type="button" class="attendance-tab-button" data-attendance-tab="batch">批量排班</button>
+                    <button type="button" class="attendance-tab-button" data-attendance-tab="alerts">考勤预警</button>
                 </div>
 
                 <div class="attendance-tab-content active" id="attendance-tab-shifts">
@@ -2969,6 +3243,32 @@
                             </div>
                             <div class="batch-result" id="batchResult"></div>
                         </form>
+                    </div>
+                </div>
+
+                <div class="attendance-tab-content" id="attendance-tab-alerts">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h4 style="font-size: 1.1rem; color: rgba(255,255,255,0.9);">
+                            考勤预警 <span class="alert-badge" id="alertBadge">0</span>
+                        </h4>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div style="display: flex; gap: 5px; align-items: center;">
+                                <label style="color: rgba(255,255,255,0.7); font-size: 0.9rem;">日期:</label>
+                                <input type="date" id="alertDate" style="padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: #fff;">
+                            </div>
+                            <button class="btn-add" id="refreshAlertsBtn">
+                                <span>🔄</span>
+                                刷新
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="alertsContainer">
+                        <div class="empty-alerts" id="emptyAlerts" style="display: none;">
+                            <div class="icon">✅</div>
+                            <p>今日考勤正常，无异常记录</p>
+                        </div>
+                        <div class="alerts-list" id="alertsList"></div>
                     </div>
                 </div>
             </div>
@@ -4885,6 +5185,261 @@
         let currentAttendanceTab = 'shifts';
         let currentScheduleView = 'calendar';
 
+        async function fetchAttendanceAlerts(date = null) {
+            let url = '/attendance/attendance-alerts';
+            if (date) {
+                url += `?date=${date}`;
+            }
+
+            const response = await fetch(url, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function approveAttendanceRecord(recordId, newStatus, remark = '') {
+            const response = await fetch('/attendance/attendance-approve', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    record_id: recordId,
+                    new_status: newStatus,
+                    remark: remark
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function fetchAttendanceRecord(recordId) {
+            const response = await fetch(`/attendance/attendance-records/${recordId}`, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'LATE':
+                    return 'status-late';
+                case 'EARLY_LEAVE':
+                    return 'status-early';
+                case 'ABSENT':
+                    return 'status-absent';
+                case 'MANUAL_APPROVED':
+                case 'NORMAL':
+                    return 'status-approved';
+                default:
+                    return '';
+            }
+        }
+
+        function getStatusLabel(status) {
+            switch (status) {
+                case 'LATE':
+                    return '迟到';
+                case 'EARLY_LEAVE':
+                    return '早退';
+                case 'ABSENT':
+                    return '旷工';
+                case 'NORMAL':
+                    return '正常';
+                case 'MANUAL_APPROVED':
+                    return '已审批';
+                default:
+                    return status;
+            }
+        }
+
+        function getLocationStatusLabel(status) {
+            switch (status) {
+                case 'OUT_OF_RANGE':
+                    return '地点异常';
+                case 'NORMAL':
+                    return '正常';
+                default:
+                    return status;
+            }
+        }
+
+        function formatTime(timeStr) {
+            if (!timeStr) return '-';
+            const date = new Date(timeStr);
+            return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function renderAttendanceAlerts(alerts) {
+            const alertsList = document.getElementById('alertsList');
+            const emptyAlerts = document.getElementById('emptyAlerts');
+            const alertBadge = document.getElementById('alertBadge');
+            
+            if (alerts && alerts.length > 0) {
+                alertsList.style.display = 'flex';
+                emptyAlerts.style.display = 'none';
+                alertBadge.textContent = alerts.length;
+                
+                alertsList.innerHTML = alerts.map(alert => {
+                    const isApproved = alert.is_approved;
+                    const statusClass = getStatusBadgeClass(alert.attendance_status);
+                    const hasLocationIssue = alert.check_in_location_status === 'OUT_OF_RANGE' || 
+                                            alert.check_out_location_status === 'OUT_OF_RANGE';
+                    
+                    let cardClass = 'alert-card';
+                    if (alert.attendance_status === 'LATE') cardClass += ' status-late';
+                    else if (alert.attendance_status === 'EARLY_LEAVE') cardClass += ' status-early';
+                    else if (hasLocationIssue) cardClass += ' status-location';
+                    if (isApproved) cardClass += ' approved';
+                    
+                    return `
+                        <div class="${cardClass}" data-record-id="${alert.record_id}">
+                            <div class="alert-header">
+                                <div class="alert-user-info">
+                                    <div class="alert-avatar">${alert.username.charAt(0).toUpperCase()}</div>
+                                    <div>
+                                        <div class="alert-name">${alert.username}</div>
+                                        <div class="alert-date">${alert.attendance_date}</div>
+                                    </div>
+                                </div>
+                                <span class="alert-status-badge ${statusClass}">
+                                    ${getStatusLabel(alert.attendance_status)}
+                                </span>
+                            </div>
+                            <div class="alert-details">
+                                <div class="alert-detail-item">
+                                    <span class="alert-detail-label">上班打卡</span>
+                                    <span class="alert-detail-value ${alert.check_in_location_status === 'OUT_OF_RANGE' ? 'abnormal' : ''}">
+                                        ${formatTime(alert.check_in_time)}
+                                        ${alert.check_in_location_status === 'OUT_OF_RANGE' ? ' (地点异常)' : ''}
+                                    </span>
+                                </div>
+                                <div class="alert-detail-item">
+                                    <span class="alert-detail-label">下班打卡</span>
+                                    <span class="alert-detail-value ${alert.check_out_location_status === 'OUT_OF_RANGE' ? 'abnormal' : ''}">
+                                        ${formatTime(alert.check_out_time)}
+                                        ${alert.check_out_location_status === 'OUT_OF_RANGE' ? ' (地点异常)' : ''}
+                                    </span>
+                                </div>
+                                ${alert.remark ? `
+                                <div class="alert-detail-item" style="grid-column: 1 / -1;">
+                                    <span class="alert-detail-label">备注</span>
+                                    <span class="alert-detail-value">${alert.remark}</span>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="alert-actions">
+                                ${!isApproved ? `
+                                <button type="button" class="btn-alert-action btn-approve" onclick="handleApproveAlert(${alert.record_id})">
+                                    ✅ 补签
+                                </button>
+                                <button type="button" class="btn-alert-action btn-remark" onclick="handleRemarkAlert(${alert.record_id})">
+                                    📝 备注
+                                </button>
+                                ` : `
+                                <span style="color: #00ff88; font-size: 0.85rem;">已处理</span>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                alertsList.style.display = 'none';
+                emptyAlerts.style.display = 'block';
+                alertBadge.textContent = '0';
+            }
+        }
+
+        async function loadAttendanceAlerts() {
+            try {
+                const alertDateInput = document.getElementById('alertDate');
+                let date = null;
+                if (alertDateInput && alertDateInput.value) {
+                    date = alertDateInput.value;
+                }
+                
+                const alerts = await fetchAttendanceAlerts(date);
+                renderAttendanceAlerts(alerts);
+            } catch (error) {
+                console.error('加载考勤预警失败:', error);
+                const alertsList = document.getElementById('alertsList');
+                const emptyAlerts = document.getElementById('emptyAlerts');
+                if (alertsList) alertsList.style.display = 'none';
+                if (emptyAlerts) {
+                    emptyAlerts.style.display = 'block';
+                    emptyAlerts.innerHTML = `
+                        <div class="icon">⚠️</div>
+                        <p>加载失败: ${error.message}</p>
+                    `;
+                }
+            }
+        }
+
+        function handleApproveAlert(recordId) {
+            const newStatus = 'MANUAL_APPROVED';
+            const remark = prompt('请输入备注（可选）:');
+            if (remark === null) return;
+            
+            approveAttendanceRecord(recordId, newStatus, remark || '')
+                .then(() => {
+                    showSuccessToast('补签成功');
+                    loadAttendanceAlerts();
+                })
+                .catch(error => {
+                    showToast(error.message || '补签失败');
+                });
+        }
+
+        function handleRemarkAlert(recordId) {
+            const remark = prompt('请输入备注:');
+            if (remark === null || remark.trim() === '') return;
+            
+            approveAttendanceRecord(recordId, 'MANUAL_APPROVED', remark.trim())
+                .then(() => {
+                    showSuccessToast('备注已添加');
+                    loadAttendanceAlerts();
+                })
+                .catch(error => {
+                    showToast(error.message || '操作失败');
+                });
+        }
+
         async function fetchWorkShifts() {
             const response = await fetch('/attendance/work-shifts', {
                 headers: getAuthHeaders()
@@ -5370,6 +5925,8 @@
                 loadSchedulesForView();
             } else if (tabName === 'batch') {
                 loadBatchScheduleData();
+            } else if (tabName === 'alerts') {
+                loadAttendanceAlerts();
             }
         }
 
@@ -5530,6 +6087,7 @@
                 renderUserSelect(users);
                 renderUserFilter(users);
                 await loadCalendarSchedules();
+                await loadAttendanceAlerts();
             } catch (error) {
                 console.error('加载排班数据失败:', error);
             }
@@ -5781,6 +6339,16 @@
                         submitBtn.disabled = false;
                     }
                 });
+            }
+
+            const refreshAlertsBtn = document.getElementById('refreshAlertsBtn');
+            if (refreshAlertsBtn) {
+                refreshAlertsBtn.addEventListener('click', loadAttendanceAlerts);
+            }
+
+            const alertDate = document.getElementById('alertDate');
+            if (alertDate) {
+                alertDate.addEventListener('change', loadAttendanceAlerts);
             }
         });
     </script>
