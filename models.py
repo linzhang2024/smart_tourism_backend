@@ -149,3 +149,27 @@ class PointLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="point_logs")
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    face_value = Column(Integer, nullable=False)
+    points_required = Column(Integer, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UserCoupon(Base):
+    __tablename__ = "user_coupons"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    coupon_id = Column(Integer, ForeignKey("coupons.id"), nullable=False)
+    is_used = Column(Boolean, default=False)
+    obtained_at = Column(DateTime, default=datetime.utcnow)
+    used_at = Column(DateTime, nullable=True)
+
+    coupon = relationship("Coupon")
