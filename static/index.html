@@ -1922,6 +1922,568 @@
                 height: 300px;
             }
         }
+
+        .attendance-management-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .attendance-management-section.active {
+            display: block;
+        }
+
+        .attendance-container {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .attendance-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #00ff88, #00d2ff, #8b5cf6);
+        }
+
+        .attendance-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .attendance-header h3 {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .attendance-header h3::before {
+            content: '';
+            width: 5px;
+            height: 28px;
+            background: linear-gradient(180deg, #00ff88, #00d2ff);
+            border-radius: 3px;
+        }
+
+        .attendance-tab-container {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .attendance-tab-button {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .attendance-tab-button:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .attendance-tab-button.active {
+            color: #00d2ff;
+        }
+
+        .attendance-tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #00d2ff, #8b5cf6);
+        }
+
+        .attendance-tab-content {
+            display: none;
+        }
+
+        .attendance-tab-content.active {
+            display: block;
+        }
+
+        .shift-card {
+            background: rgba(10, 10, 26, 0.5);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .shift-card:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            transform: translateY(-2px);
+        }
+
+        .shift-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .shift-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .shift-time {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .shift-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-shift-action {
+            padding: 6px 14px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-shift-edit {
+            background: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-shift-edit:hover {
+            background: rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-shift-delete {
+            background: rgba(255, 68, 68, 0.2);
+            color: #ff4444;
+            border: 1px solid rgba(255, 68, 68, 0.3);
+        }
+
+        .btn-shift-delete:hover {
+            background: rgba(255, 68, 68, 0.3);
+        }
+
+        .calendar-container {
+            background: rgba(10, 10, 26, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .calendar-nav {
+            padding: 8px 16px;
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
+            color: #ffffff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .calendar-nav:hover {
+            background: rgba(139, 92, 246, 0.3);
+        }
+
+        .calendar-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+
+        .calendar-day-header {
+            text-align: center;
+            padding: 10px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9rem;
+        }
+
+        .calendar-day {
+            min-height: 80px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(139, 92, 246, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .calendar-day:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .calendar-day.other-month {
+            opacity: 0.3;
+        }
+
+        .calendar-day.today {
+            background: rgba(0, 210, 255, 0.1);
+            border-color: rgba(0, 210, 255, 0.3);
+        }
+
+        .calendar-day-number {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 5px;
+        }
+
+        .calendar-schedule-item {
+            font-size: 0.75rem;
+            padding: 3px 6px;
+            margin-bottom: 3px;
+            border-radius: 4px;
+            background: rgba(139, 92, 246, 0.3);
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .calendar-schedule-item.morning {
+            background: rgba(255, 215, 0, 0.3);
+        }
+
+        .calendar-schedule-item.afternoon {
+            background: rgba(0, 210, 255, 0.3);
+        }
+
+        .calendar-schedule-item.night {
+            background: rgba(139, 92, 246, 0.3);
+        }
+
+        .batch-schedule-form {
+            background: rgba(10, 10, 26, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .batch-schedule-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .batch-schedule-header h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .batch-form-row {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .batch-form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .batch-form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+        }
+
+        .batch-form-group select,
+        .batch-form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 0.95rem;
+            border: 2px solid rgba(139, 92, 246, 0.3);
+            border-radius: 10px;
+            background: rgba(10, 10, 26, 0.8);
+            color: #ffffff;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .batch-form-group select:focus,
+        .batch-form-group input:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+        }
+
+        .batch-form-group select option {
+            background: rgba(10, 10, 26, 0.95);
+            color: #ffffff;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            cursor: pointer;
+        }
+
+        .user-select-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(10, 10, 26, 0.5);
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .user-checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .user-checkbox-item:hover {
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        .user-checkbox-item input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+        }
+
+        .user-checkbox-item .user-name {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.9rem;
+        }
+
+        .user-checkbox-item .user-role {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(139, 92, 246, 0.2);
+            color: #8b5cf6;
+        }
+
+        .schedule-list-container {
+            margin-top: 20px;
+        }
+
+        .schedule-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .schedule-list-header h4 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .schedule-filters {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .schedule-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .schedule-filter-item label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.85rem;
+        }
+
+        .schedule-filter-item select,
+        .schedule-filter-item input {
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 8px;
+            background: rgba(10, 10, 26, 0.8);
+            color: #ffffff;
+        }
+
+        .schedule-filter-item select:focus,
+        .schedule-filter-item input:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+        }
+
+        .shift-modal .modal {
+            max-width: 500px;
+        }
+
+        .shift-form-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .shift-form-actions .btn {
+            flex: 1;
+            padding: 14px;
+        }
+
+        .empty-shifts {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .empty-shifts .icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .batch-result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .batch-result.success {
+            display: block;
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            color: #00ff88;
+        }
+
+        .batch-result.error {
+            display: block;
+            background: rgba(255, 68, 68, 0.1);
+            border: 1px solid rgba(255, 68, 68, 0.3);
+            color: #ff4444;
+        }
+
+        .view-toggle {
+            display: flex;
+            gap: 5px;
+            background: rgba(10, 10, 26, 0.5);
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .view-toggle button {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .view-toggle button:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .view-toggle button.active {
+            background: rgba(139, 92, 246, 0.3);
+            color: #ffffff;
+        }
+
+        .btn-add {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: linear-gradient(135deg, #00ff88, #00d2ff);
+            color: #0a0a1a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-add:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 255, 136, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .attendance-tab-button {
+                padding: 10px 16px;
+                font-size: 0.85rem;
+            }
+
+            .calendar-grid {
+                grid-template-columns: repeat(7, 1fr);
+            }
+
+            .calendar-day {
+                min-height: 50px;
+                padding: 5px;
+            }
+
+            .calendar-schedule-item {
+                font-size: 0.65rem;
+                padding: 2px 4px;
+            }
+
+            .batch-form-row {
+                flex-direction: column;
+            }
+        }
     </style>
 </head>
 <body>
@@ -2270,6 +2832,134 @@
                 </table>
             </div>
         </div>
+
+        <div class="attendance-management-section" id="attendanceManagementSection">
+            <div class="attendance-container">
+                <div class="attendance-header">
+                    <h3>员工排班管理</h3>
+                    <button class="btn-add" id="refreshAttendanceBtn">
+                        <span>🔄</span>
+                        刷新数据
+                    </button>
+                </div>
+
+                <div class="attendance-tab-container">
+                    <button type="button" class="attendance-tab-button active" data-attendance-tab="shifts">班次管理</button>
+                    <button type="button" class="attendance-tab-button" data-attendance-tab="schedule">排班表</button>
+                    <button type="button" class="attendance-tab-button" data-attendance-tab="batch">批量排班</button>
+                </div>
+
+                <div class="attendance-tab-content active" id="attendance-tab-shifts">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h4 style="font-size: 1.1rem; color: rgba(255,255,255,0.9);">班次列表</h4>
+                        <button class="btn-add" id="addShiftBtn">
+                            <span>+</span>
+                            新增班次
+                        </button>
+                    </div>
+                    <div id="shiftsContainer"></div>
+                </div>
+
+                <div class="attendance-tab-content" id="attendance-tab-schedule">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h4 style="font-size: 1.1rem; color: rgba(255,255,255,0.9);">员工排班表</h4>
+                        <div class="view-toggle">
+                            <button type="button" class="active" data-view="calendar">日历视图</button>
+                            <button type="button" data-view="list">列表视图</button>
+                        </div>
+                    </div>
+
+                    <div id="scheduleCalendarView">
+                        <div class="calendar-container">
+                            <div class="calendar-header">
+                                <button type="button" class="calendar-nav" id="prevMonthBtn">◀ 上月</button>
+                                <div class="calendar-title" id="calendarTitle">2025年6月</div>
+                                <button type="button" class="calendar-nav" id="nextMonthBtn">下月 ▶</button>
+                            </div>
+                            <div class="calendar-grid" id="calendarGrid"></div>
+                        </div>
+                    </div>
+
+                    <div id="scheduleListView" style="display: none;">
+                        <div class="schedule-filters">
+                            <div class="schedule-filter-item">
+                                <label>员工：</label>
+                                <select id="filterUserId">
+                                    <option value="">全部员工</option>
+                                </select>
+                            </div>
+                            <div class="schedule-filter-item">
+                                <label>日期范围：</label>
+                                <input type="date" id="filterStartDate">
+                            </div>
+                            <div class="schedule-filter-item">
+                                <label>至：</label>
+                                <input type="date" id="filterEndDate">
+                            </div>
+                        </div>
+                        <table class="records-table" id="scheduleTable">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>员工</th>
+                                    <th>班次</th>
+                                    <th>日期</th>
+                                    <th>时间</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scheduleTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="attendance-tab-content" id="attendance-tab-batch">
+                    <div class="batch-schedule-form">
+                        <div class="batch-schedule-header">
+                            <h4>批量排班</h4>
+                        </div>
+                        <form id="batchScheduleForm">
+                            <div class="batch-form-row">
+                                <div class="batch-form-group">
+                                    <label for="batchShiftId">选择班次</label>
+                                    <select id="batchShiftId" name="work_shift_id" required>
+                                        <option value="">请先创建班次</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="batch-form-row">
+                                <div class="batch-form-group">
+                                    <label for="batchStartDate">开始日期</label>
+                                    <input type="date" id="batchStartDate" name="start_date" required>
+                                </div>
+                                <div class="batch-form-group">
+                                    <label for="batchEndDate">结束日期</label>
+                                    <input type="date" id="batchEndDate" name="end_date" required>
+                                </div>
+                            </div>
+                            <div class="batch-form-row">
+                                <div class="batch-form-group">
+                                    <label>选择员工（可多选）</label>
+                                    <div class="user-select-container" id="batchUserSelect"></div>
+                                </div>
+                            </div>
+                            <div class="batch-form-row">
+                                <div class="batch-form-group">
+                                    <div class="checkbox-group">
+                                        <input type="checkbox" id="excludeWeekends" name="exclude_weekends">
+                                        <label for="excludeWeekends">排除周末（周六、周日不排班）</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary" id="submitBatchBtn">执行批量排班</button>
+                            </div>
+                            <div class="batch-result" id="batchResult"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <button class="feedback-fab" id="feedbackBtn">
@@ -2388,6 +3078,31 @@
                 <div class="form-actions">
                     <button type="button" class="btn btn-cancel" id="cancelHandleBtn">取消</button>
                     <button type="submit" class="btn btn-primary" id="submitHandleBtn">确认处理</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay shift-modal" id="shiftModal">
+        <div class="modal">
+            <h2 class="modal-title" id="shiftModalTitle">新增班次</h2>
+            <form id="shiftForm">
+                <input type="hidden" id="shiftId">
+                <div class="form-group">
+                    <label for="shiftName">班次名称</label>
+                    <input type="text" id="shiftName" name="name" placeholder="例如：早班、晚班" required maxlength="50">
+                </div>
+                <div class="form-group">
+                    <label for="shiftStartTime">开始时间</label>
+                    <input type="time" id="shiftStartTime" name="start_time" required>
+                </div>
+                <div class="form-group">
+                    <label for="shiftEndTime">结束时间</label>
+                    <input type="time" id="shiftEndTime" name="end_time" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-cancel" id="cancelShiftBtn">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitShiftBtn">保存</button>
                 </div>
             </form>
         </div>
@@ -4153,6 +4868,660 @@
             }
         }
 
+        let currentCalendarDate = new Date();
+        let currentAttendanceTab = 'shifts';
+        let currentScheduleView = 'calendar';
+
+        async function fetchWorkShifts() {
+            const response = await fetch('/attendance/work-shifts', {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function fetchWorkShift(shiftId) {
+            const response = await fetch(`/attendance/work-shifts/${shiftId}`, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function createWorkShift(data) {
+            const response = await fetch('/attendance/work-shifts', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function updateWorkShift(shiftId, data) {
+            const response = await fetch(`/attendance/work-shifts/${shiftId}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function deleteWorkShift(shiftId) {
+            const response = await fetch(`/attendance/work-shifts/${shiftId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return true;
+        }
+
+        async function fetchSchedules(params = {}) {
+            let url = '/attendance/schedules';
+            const queryParams = [];
+            
+            if (params.user_id) {
+                queryParams.push(`user_id=${params.user_id}`);
+            }
+            if (params.start_date) {
+                queryParams.push(`start_date=${params.start_date}`);
+            }
+            if (params.end_date) {
+                queryParams.push(`end_date=${params.end_date}`);
+            }
+            
+            if (queryParams.length > 0) {
+                url += '?' + queryParams.join('&');
+            }
+
+            const response = await fetch(url, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function fetchSchedulesCalendar(startDate, endDate) {
+            let url = '/attendance/schedules/calendar';
+            const queryParams = [];
+            
+            if (startDate) {
+                queryParams.push(`start_date=${startDate}`);
+            }
+            if (endDate) {
+                queryParams.push(`end_date=${endDate}`);
+            }
+            
+            if (queryParams.length > 0) {
+                url += '?' + queryParams.join('&');
+            }
+
+            const response = await fetch(url, {
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function createSchedule(data) {
+            const response = await fetch('/attendance/schedules', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function createBatchSchedules(data) {
+            const response = await fetch('/attendance/schedules/batch', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(data)
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return await response.json();
+        }
+
+        async function deleteSchedule(scheduleId) {
+            const response = await fetch(`/attendance/schedules/${scheduleId}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                
+                if (response.status === 401) {
+                    clearAuthToken();
+                    updateAuthUI();
+                    throw new Error('请先登录');
+                }
+                
+                throw new Error(formatValidationError(errorData));
+            }
+
+            return true;
+        }
+
+        function renderShiftsList(shifts) {
+            const container = document.getElementById('shiftsContainer');
+            
+            if (!shifts || shifts.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-shifts">
+                        <div class="icon">📅</div>
+                        <p>暂无班次数据</p>
+                        <p style="font-size: 0.85rem; margin-top: 10px; color: rgba(255,255,255,0.4);">
+                            点击"新增班次"按钮创建第一个班次
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = shifts.map(shift => `
+                <div class="shift-card" data-shift-id="${shift.id}">
+                    <div class="shift-card-header">
+                        <div>
+                            <div class="shift-name">${shift.name}</div>
+                            <div class="shift-time">🕐 ${shift.start_time} - ${shift.end_time}</div>
+                        </div>
+                        <div class="shift-actions">
+                            <button type="button" class="btn-shift-action btn-shift-edit" data-shift-id="${shift.id}">
+                                编辑
+                            </button>
+                            <button type="button" class="btn-shift-action btn-shift-delete" data-shift-id="${shift.id}">
+                                删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.btn-shift-edit').forEach(btn => {
+                btn.addEventListener('click', () => openEditShiftModal(parseInt(btn.dataset.shiftId)));
+            });
+
+            document.querySelectorAll('.btn-shift-delete').forEach(btn => {
+                btn.addEventListener('click', () => handleDeleteShift(parseInt(btn.dataset.shiftId)));
+            });
+        }
+
+        function getShiftTimeCategory(startTime) {
+            const hour = parseInt(startTime.split(':')[0]);
+            if (hour >= 6 && hour < 12) return 'morning';
+            if (hour >= 12 && hour < 18) return 'afternoon';
+            return 'night';
+        }
+
+        function renderCalendar(schedules) {
+            const grid = document.getElementById('calendarGrid');
+            const titleEl = document.getElementById('calendarTitle');
+            
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            
+            titleEl.textContent = `${year}年${month + 1}月`;
+            
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const startDayOfWeek = firstDay.getDay();
+            const daysInMonth = lastDay.getDate();
+            
+            const prevMonthLastDay = new Date(year, month, 0).getDate();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const schedulesByDate = {};
+            if (schedules) {
+                schedules.forEach(schedule => {
+                    const dateKey = schedule.schedule_date;
+                    if (!schedulesByDate[dateKey]) {
+                        schedulesByDate[dateKey] = [];
+                    }
+                    schedulesByDate[dateKey].push(schedule);
+                });
+            }
+            
+            let html = `
+                <div class="calendar-day-header">日</div>
+                <div class="calendar-day-header">一</div>
+                <div class="calendar-day-header">二</div>
+                <div class="calendar-day-header">三</div>
+                <div class="calendar-day-header">四</div>
+                <div class="calendar-day-header">五</div>
+                <div class="calendar-day-header">六</div>
+            `;
+            
+            for (let i = startDayOfWeek - 1; i >= 0; i--) {
+                const day = prevMonthLastDay - i;
+                html += `<div class="calendar-day other-month"><div class="calendar-day-number">${day}</div></div>`;
+            }
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const currentDate = new Date(year, month, day);
+                const isToday = currentDate.getTime() === today.getTime();
+                const daySchedules = schedulesByDate[dateStr] || [];
+                
+                let dayClass = 'calendar-day';
+                if (isToday) dayClass += ' today';
+                
+                html += `<div class="${dayClass}"><div class="calendar-day-number">${day}</div>`;
+                
+                daySchedules.forEach(schedule => {
+                    const shiftName = schedule.work_shift ? schedule.work_shift.name : '未知班次';
+                    const userName = schedule.user ? schedule.user.username : '未知员工';
+                    const startTime = schedule.work_shift ? schedule.work_shift.start_time : '00:00';
+                    const category = getShiftTimeCategory(startTime);
+                    
+                    html += `<div class="calendar-schedule-item ${category}" title="${userName}: ${shiftName} (${startTime})">
+                        ${userName}: ${shiftName}
+                    </div>`;
+                });
+                
+                html += `</div>`;
+            }
+            
+            const totalDays = startDayOfWeek + daysInMonth;
+            const remainingDays = 7 - (totalDays % 7 || 7);
+            
+            for (let day = 1; day <= remainingDays; day++) {
+                html += `<div class="calendar-day other-month"><div class="calendar-day-number">${day}</div></div>`;
+            }
+            
+            grid.innerHTML = html;
+        }
+
+        function renderScheduleList(schedules) {
+            const tbody = document.getElementById('scheduleTableBody');
+            
+            if (!schedules || schedules.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; color: rgba(255,255,255,0.5); padding: 30px;">
+                            暂无排班数据
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = schedules.map(schedule => {
+                const userName = schedule.user ? schedule.user.username : '未知';
+                const shiftName = schedule.work_shift ? schedule.work_shift.name : '未知';
+                const startTime = schedule.work_shift ? schedule.work_shift.start_time : '-';
+                const endTime = schedule.work_shift ? schedule.work_shift.end_time : '-';
+                
+                return `
+                    <tr>
+                        <td>${schedule.id}</td>
+                        <td>${userName}</td>
+                        <td>${shiftName}</td>
+                        <td>${schedule.schedule_date}</td>
+                        <td>${startTime} - ${endTime}</td>
+                        <td class="action-cell">
+                            <button type="button" class="btn-shift-action btn-shift-delete" data-schedule-id="${schedule.id}">
+                                删除
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.querySelectorAll('[data-schedule-id]').forEach(btn => {
+                btn.addEventListener('click', () => handleDeleteSchedule(parseInt(btn.dataset.scheduleId)));
+            });
+        }
+
+        function renderUserSelect(users, selectedIds = []) {
+            const container = document.getElementById('batchUserSelect');
+            
+            if (!users || users.length === 0) {
+                container.innerHTML = '<p style="color: rgba(255,255,255,0.4);">暂无员工数据</p>';
+                return;
+            }
+
+            container.innerHTML = users.filter(user => user.role === 'STAFF' || user.role === 'ADMIN').map(user => `
+                <label class="user-checkbox-item">
+                    <input type="checkbox" name="user_ids" value="${user.id}" ${selectedIds.includes(user.id) ? 'checked' : ''}>
+                    <span class="user-name">${user.username}</span>
+                    <span class="user-role">${user.role}</span>
+                </label>
+            `).join('');
+        }
+
+        function renderShiftSelect(shifts) {
+            const select = document.getElementById('batchShiftId');
+            const filterSelect = document.getElementById('filterShiftId');
+            
+            if (!shifts || shifts.length === 0) {
+                select.innerHTML = '<option value="">请先创建班次</option>';
+                if (filterSelect) {
+                    filterSelect.innerHTML = '<option value="">全部班次</option>';
+                }
+                return;
+            }
+
+            select.innerHTML = '<option value="">请选择班次</option>' + 
+                shifts.map(shift => `<option value="${shift.id}">${shift.name} (${shift.start_time}-${shift.end_time})</option>`).join('');
+            
+            if (filterSelect) {
+                filterSelect.innerHTML = '<option value="">全部班次</option>' + 
+                    shifts.map(shift => `<option value="${shift.id}">${shift.name}</option>`).join('');
+            }
+        }
+
+        function renderUserFilter(users) {
+            const select = document.getElementById('filterUserId');
+            if (!select) return;
+            
+            if (!users || users.length === 0) {
+                select.innerHTML = '<option value="">全部员工</option>';
+                return;
+            }
+
+            select.innerHTML = '<option value="">全部员工</option>' + 
+                users.filter(user => user.role === 'STAFF' || user.role === 'ADMIN')
+                    .map(user => `<option value="${user.id}">${user.username}</option>`).join('');
+        }
+
+        function switchAttendanceTab(tabName) {
+            currentAttendanceTab = tabName;
+            
+            document.querySelectorAll('.attendance-tab-button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.attendanceTab === tabName) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            document.querySelectorAll('.attendance-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(`attendance-tab-${tabName}`).classList.add('active');
+
+            if (tabName === 'shifts') {
+                loadShifts();
+            } else if (tabName === 'schedule') {
+                loadSchedulesForView();
+            } else if (tabName === 'batch') {
+                loadBatchScheduleData();
+            }
+        }
+
+        function switchScheduleView(view) {
+            currentScheduleView = view;
+            
+            document.querySelectorAll('.view-toggle button').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.view === view) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            const calendarView = document.getElementById('scheduleCalendarView');
+            const listView = document.getElementById('scheduleListView');
+            
+            if (view === 'calendar') {
+                calendarView.style.display = 'block';
+                listView.style.display = 'none';
+                loadCalendarSchedules();
+            } else {
+                calendarView.style.display = 'none';
+                listView.style.display = 'block';
+                loadListSchedules();
+            }
+        }
+
+        async function loadShifts() {
+            try {
+                const shifts = await fetchWorkShifts();
+                renderShiftsList(shifts);
+                renderShiftSelect(shifts);
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        async function loadSchedulesForView() {
+            if (currentScheduleView === 'calendar') {
+                await loadCalendarSchedules();
+            } else {
+                await loadListSchedules();
+            }
+        }
+
+        async function loadCalendarSchedules() {
+            try {
+                const year = currentCalendarDate.getFullYear();
+                const month = currentCalendarDate.getMonth();
+                const lastDay = new Date(year, month + 1, 0).getDate();
+                
+                const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+                const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+                
+                const schedules = await fetchSchedulesCalendar(startDate, endDate);
+                renderCalendar(schedules);
+            } catch (error) {
+                console.error('加载日历排班失败:', error);
+                renderCalendar([]);
+            }
+        }
+
+        async function loadListSchedules() {
+            try {
+                const params = {};
+                
+                const userId = document.getElementById('filterUserId')?.value;
+                const startDate = document.getElementById('filterStartDate')?.value;
+                const endDate = document.getElementById('filterEndDate')?.value;
+                
+                if (userId) params.user_id = parseInt(userId);
+                if (startDate) params.start_date = startDate;
+                if (endDate) params.end_date = endDate;
+                
+                const schedules = await fetchSchedules(params);
+                renderScheduleList(schedules);
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        async function loadBatchScheduleData() {
+            try {
+                const [shifts, users] = await Promise.all([
+                    fetchWorkShifts(),
+                    fetchUsers()
+                ]);
+                
+                renderShiftSelect(shifts);
+                renderUserSelect(users);
+                renderUserFilter(users);
+            } catch (error) {
+                console.error('加载批量排班数据失败:', error);
+            }
+        }
+
+        function openAddShiftModal() {
+            document.getElementById('shiftModalTitle').textContent = '新增班次';
+            document.getElementById('shiftId').value = '';
+            document.getElementById('shiftName').value = '';
+            document.getElementById('shiftStartTime').value = '09:00';
+            document.getElementById('shiftEndTime').value = '18:00';
+            document.getElementById('shiftModal').classList.add('active');
+        }
+
+        async function openEditShiftModal(shiftId) {
+            try {
+                const shift = await fetchWorkShift(shiftId);
+                
+                document.getElementById('shiftModalTitle').textContent = '编辑班次';
+                document.getElementById('shiftId').value = shift.id;
+                document.getElementById('shiftName').value = shift.name;
+                document.getElementById('shiftStartTime').value = shift.start_time;
+                document.getElementById('shiftEndTime').value = shift.end_time;
+                document.getElementById('shiftModal').classList.add('active');
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        function closeShiftModal() {
+            document.getElementById('shiftModal').classList.remove('active');
+        }
+
+        async function handleDeleteShift(shiftId) {
+            if (!confirm('确定要删除这个班次吗？')) return;
+            
+            try {
+                await deleteWorkShift(shiftId);
+                showSuccessToast('班次已删除');
+                await loadShifts();
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        async function handleDeleteSchedule(scheduleId) {
+            if (!confirm('确定要删除这个排班吗？')) return;
+            
+            try {
+                await deleteSchedule(scheduleId);
+                showSuccessToast('排班已删除');
+                await loadSchedulesForView();
+            } catch (error) {
+                showToast(error.message);
+            }
+        }
+
+        async function loadAttendanceData() {
+            try {
+                const [shifts, users] = await Promise.all([
+                    fetchWorkShifts(),
+                    fetchUsers()
+                ]);
+                
+                renderShiftsList(shifts);
+                renderShiftSelect(shifts);
+                renderUserSelect(users);
+                renderUserFilter(users);
+                await loadCalendarSchedules();
+            } catch (error) {
+                console.error('加载排班数据失败:', error);
+            }
+        }
+
         const originalUpdateAuthUI = updateAuthUI;
         updateAuthUI = async function() {
             originalUpdateAuthUI();
@@ -4160,6 +5529,7 @@
             const distributorSection = document.getElementById('distributorSection');
             const earningsSection = document.getElementById('earningsSection');
             const complaintManagementSection = document.getElementById('complaintManagementSection');
+            const attendanceManagementSection = document.getElementById('attendanceManagementSection');
             const token = getAuthToken();
             
             if (token) {
@@ -4169,9 +5539,12 @@
                     
                     if (role === 'ADMIN' || role === 'STAFF') {
                         complaintManagementSection.classList.add('active');
+                        attendanceManagementSection.classList.add('active');
                         loadComplaints();
+                        loadAttendanceData();
                     } else {
                         complaintManagementSection.classList.remove('active');
+                        attendanceManagementSection.classList.remove('active');
                     }
                     
                     const distributorStatus = await fetchDistributorStatus();
@@ -4191,11 +5564,13 @@
                 } catch (e) {
                     console.error('updateAuthUI 错误:', e);
                     complaintManagementSection.classList.remove('active');
+                    attendanceManagementSection.classList.remove('active');
                     distributorSection.classList.remove('active');
                     earningsSection.classList.remove('active');
                 }
             } else {
                 complaintManagementSection.classList.remove('active');
+                attendanceManagementSection.classList.remove('active');
                 distributorSection.classList.remove('active');
                 earningsSection.classList.remove('active');
                 currentDistributor = null;
@@ -4218,6 +5593,181 @@
             const refreshEarningsBtn = document.getElementById('refreshEarningsBtn');
             if (refreshEarningsBtn) {
                 refreshEarningsBtn.addEventListener('click', loadAndRenderEarnings);
+            }
+
+            document.querySelectorAll('.attendance-tab-button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    switchAttendanceTab(btn.dataset.attendanceTab);
+                });
+            });
+
+            document.querySelectorAll('.view-toggle button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    switchScheduleView(btn.dataset.view);
+                });
+            });
+
+            const addShiftBtn = document.getElementById('addShiftBtn');
+            if (addShiftBtn) {
+                addShiftBtn.addEventListener('click', openAddShiftModal);
+            }
+
+            const cancelShiftBtn = document.getElementById('cancelShiftBtn');
+            if (cancelShiftBtn) {
+                cancelShiftBtn.addEventListener('click', closeShiftModal);
+            }
+
+            const shiftModal = document.getElementById('shiftModal');
+            if (shiftModal) {
+                shiftModal.addEventListener('click', (e) => {
+                    if (e.target.id === 'shiftModal') {
+                        closeShiftModal();
+                    }
+                });
+            }
+
+            const shiftForm = document.getElementById('shiftForm');
+            if (shiftForm) {
+                shiftForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const shiftId = document.getElementById('shiftId').value;
+                    const name = document.getElementById('shiftName').value.trim();
+                    const startTime = document.getElementById('shiftStartTime').value;
+                    const endTime = document.getElementById('shiftEndTime').value;
+
+                    if (!name || !startTime || !endTime) {
+                        showToast('请填写完整的班次信息');
+                        return;
+                    }
+
+                    try {
+                        const submitBtn = document.getElementById('submitShiftBtn');
+                        const originalText = submitBtn.textContent;
+                        submitBtn.textContent = '保存中...';
+                        submitBtn.disabled = true;
+
+                        if (shiftId) {
+                            await updateWorkShift(parseInt(shiftId), { name, start_time: startTime, end_time: endTime });
+                            showSuccessToast('班次已更新');
+                        } else {
+                            await createWorkShift({ name, start_time: startTime, end_time: endTime });
+                            showSuccessToast('班次已创建');
+                        }
+
+                        closeShiftModal();
+                        await loadShifts();
+
+                        submitBtn.textContent = originalText;
+                        submitBtn.disabled = false;
+                    } catch (error) {
+                        showToast(error.message || '保存失败，请稍后重试');
+                        const submitBtn = document.getElementById('submitShiftBtn');
+                        submitBtn.textContent = '保存';
+                        submitBtn.disabled = false;
+                    }
+                });
+            }
+
+            const refreshAttendanceBtn = document.getElementById('refreshAttendanceBtn');
+            if (refreshAttendanceBtn) {
+                refreshAttendanceBtn.addEventListener('click', loadAttendanceData);
+            }
+
+            const prevMonthBtn = document.getElementById('prevMonthBtn');
+            if (prevMonthBtn) {
+                prevMonthBtn.addEventListener('click', () => {
+                    currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+                    loadCalendarSchedules();
+                });
+            }
+
+            const nextMonthBtn = document.getElementById('nextMonthBtn');
+            if (nextMonthBtn) {
+                nextMonthBtn.addEventListener('click', () => {
+                    currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+                    loadCalendarSchedules();
+                });
+            }
+
+            const filterUserId = document.getElementById('filterUserId');
+            if (filterUserId) {
+                filterUserId.addEventListener('change', loadListSchedules);
+            }
+
+            const filterStartDate = document.getElementById('filterStartDate');
+            if (filterStartDate) {
+                filterStartDate.addEventListener('change', loadListSchedules);
+            }
+
+            const filterEndDate = document.getElementById('filterEndDate');
+            if (filterEndDate) {
+                filterEndDate.addEventListener('change', loadListSchedules);
+            }
+
+            const batchScheduleForm = document.getElementById('batchScheduleForm');
+            if (batchScheduleForm) {
+                batchScheduleForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const shiftId = document.getElementById('batchShiftId').value;
+                    const startDate = document.getElementById('batchStartDate').value;
+                    const endDate = document.getElementById('batchEndDate').value;
+                    const excludeWeekends = document.getElementById('excludeWeekends').checked;
+                    
+                    const selectedUserIds = Array.from(document.querySelectorAll('input[name="user_ids"]:checked'))
+                        .map(input => parseInt(input.value));
+
+                    if (!shiftId) {
+                        showToast('请选择班次');
+                        return;
+                    }
+
+                    if (!startDate || !endDate) {
+                        showToast('请选择日期范围');
+                        return;
+                    }
+
+                    if (selectedUserIds.length === 0) {
+                        showToast('请至少选择一名员工');
+                        return;
+                    }
+
+                    try {
+                        const submitBtn = document.getElementById('submitBatchBtn');
+                        const originalText = submitBtn.textContent;
+                        submitBtn.textContent = '排班中...';
+                        submitBtn.disabled = true;
+
+                        const result = await createBatchSchedules({
+                            user_ids: selectedUserIds,
+                            work_shift_id: parseInt(shiftId),
+                            start_date: startDate,
+                            end_date: endDate,
+                            exclude_weekends: excludeWeekends
+                        });
+
+                        const batchResult = document.getElementById('batchResult');
+                        batchResult.className = 'batch-result success';
+                        batchResult.textContent = `批量排班成功！已创建 ${result.created_count} 个排班记录。`;
+                        batchResult.style.display = 'block';
+
+                        showSuccessToast(`已成功创建 ${result.created_count} 个排班`);
+
+                        submitBtn.textContent = originalText;
+                        submitBtn.disabled = false;
+                    } catch (error) {
+                        const batchResult = document.getElementById('batchResult');
+                        batchResult.className = 'batch-result error';
+                        batchResult.textContent = error.message || '批量排班失败，请稍后重试';
+                        batchResult.style.display = 'block';
+
+                        showToast(error.message || '批量排班失败');
+                        const submitBtn = document.getElementById('submitBatchBtn');
+                        submitBtn.textContent = '执行批量排班';
+                        submitBtn.disabled = false;
+                    }
+                });
             }
         });
     </script>

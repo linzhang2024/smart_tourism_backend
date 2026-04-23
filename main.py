@@ -2034,6 +2034,392 @@ def get_distributor_finance_orders(
 app.include_router(distributor_router)
 
 
+attendance_router = APIRouter(prefix="/attendance", tags=["排班考勤管理"])
+
+
+@attendance_router.get("/work-shifts", response_model=List[schemas.WorkShift])
+def get_work_shifts(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    work_shifts = db.query(models.WorkShift).offset(skip).limit(limit).all()
+    return work_shifts
+
+
+@attendance_router.get("/work-shifts/{shift_id}", response_model=schemas.WorkShift)
+def get_work_shift(
+    shift_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    work_shift = db.query(models.WorkShift).filter(
+        models.WorkShift.id == shift_id
+    ).first()
+    if work_shift is None:
+        raise HTTPException(status_code=404, detail="班次不存在")
+    return work_shift
+
+
+@attendance_router.post("/work-shifts", response_model=schemas.WorkShift, status_code=status.HTTP_201_CREATED)
+def create_work_shift(
+    shift_data: schemas.WorkShiftCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    existing = db.query(models.WorkShift).filter(
+        models.WorkShift.name == shift_data.name
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="班次名称已存在"
+        )
+    
+    db_shift = models.WorkShift(
+        name=shift_data.name,
+        start_time=shift_data.start_time,
+        end_time=shift_data.end_time
+    )
+    db.add(db_shift)
+    db.commit()
+    db.refresh(db_shift)
+    
+    log_info(
+        message=f"管理员 [{current_user.id}] 创建班次: {shift_data.name}",
+        action="WORK_SHIFT_CREATED",
+        tourist_id=current_user.id
+    )
+    
+    return db_shift
+
+
+@attendance_router.put("/work-shifts/{shift_id}", response_model=schemas.WorkShift)
+def update_work_shift(
+    shift_id: int,
+    shift_data: schemas.WorkShiftUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    db_shift = db.query(models.WorkShift).filter(
+        models.WorkShift.id == shift_id
+    ).first()
+    if db_shift is None:
+        raise HTTPException(status_code=404, detail="班次不存在")
+    
+    update_dict = shift_data.model_dump(exclude_unset=True)
+    
+    if "name" in update_dict:
+        existing = db.query(models.WorkShift).filter(
+            models.WorkShift.name == update_dict["name"],
+            models.WorkShift.id != shift_id
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="班次名称已存在"
+            )
+    
+    for key, value in update_dict.items():
+        setattr(db_shift, key, value)
+    
+    db.commit()
+    db.refresh(db_shift)
+    
+    log_info(
+        message=f"管理员 [{current_user.id}] 更新班次: ID={shift_id}",
+        action="WORK_SHIFT_UPDATED",
+        tourist_id=current_user.id
+    )
+    
+    return db_shift
+
+
+@attendance_router.delete("/work-shifts/{shift_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_work_shift(
+    shift_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    db_shift = db.query(models.WorkShift).filter(
+        models.WorkShift.id == shift_id
+    ).first()
+    if db_shift is None:
+        raise HTTPException(status_code=404, detail="班次不存在")
+    
+    existing_schedules = db.query(models.Schedule).filter(
+        models.Schedule.work_shift_id == shift_id
+    ).first()
+    if existing_schedules:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该班次已有排班记录，无法删除"
+        )
+    
+    db.delete(db_shift)
+    db.commit()
+    
+    log_info(
+        message=f"管理员 [{current_user.id}] 删除班次: ID={shift_id}",
+        action="WORK_SHIFT_DELETED",
+        tourist_id=current_user.id
+    )
+    
+    return None
+
+
+def check_schedule_conflict(db: Session, user_id: int, schedule_date: str) -> Optional[models.Schedule]:
+    existing = db.query(models.Schedule).filter(
+        models.Schedule.user_id == user_id,
+        models.Schedule.schedule_date == schedule_date
+    ).first()
+    return existing
+
+
+@attendance_router.get("/schedules", response_model=List[schemas.ScheduleWithDetails])
+def get_schedules(
+    user_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    query = db.query(models.Schedule)
+    
+    if user_id is not None:
+        query = query.filter(models.Schedule.user_id == user_id)
+    if start_date is not None:
+        query = query.filter(models.Schedule.schedule_date >= start_date)
+    if end_date is not None:
+        query = query.filter(models.Schedule.schedule_date <= end_date)
+    
+    schedules = query.order_by(
+        models.Schedule.schedule_date.desc()
+    ).offset(skip).limit(limit).all()
+    
+    return schedules
+
+
+@attendance_router.get("/schedules/calendar", response_model=List[schemas.ScheduleWithDetails])
+def get_schedules_calendar(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    from datetime import datetime, timedelta
+    
+    if start_date is None:
+        today = datetime.now()
+        start_date = (today - timedelta(days=today.weekday())).strftime("%Y-%m-%d")
+    if end_date is None:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_date = (start_dt + timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    query = db.query(models.Schedule).filter(
+        models.Schedule.schedule_date >= start_date,
+        models.Schedule.schedule_date <= end_date
+    ).order_by(
+        models.Schedule.schedule_date,
+        models.Schedule.id
+    ).all()
+    
+    return query
+
+
+@attendance_router.post("/schedules", response_model=schemas.ScheduleWithDetails, status_code=status.HTTP_201_CREATED)
+def create_schedule(
+    schedule_data: schemas.ScheduleCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    user = db.query(models.User).filter(
+        models.User.id == schedule_data.user_id
+    ).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="员工不存在")
+    
+    work_shift = db.query(models.WorkShift).filter(
+        models.WorkShift.id == schedule_data.work_shift_id
+    ).first()
+    if work_shift is None:
+        raise HTTPException(status_code=404, detail="班次不存在")
+    
+    existing = check_schedule_conflict(db, schedule_data.user_id, schedule_data.schedule_date)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"该员工在 {schedule_data.schedule_date} 已有排班"
+        )
+    
+    db_schedule = models.Schedule(
+        user_id=schedule_data.user_id,
+        work_shift_id=schedule_data.work_shift_id,
+        schedule_date=schedule_data.schedule_date
+    )
+    db.add(db_schedule)
+    db.commit()
+    db.refresh(db_schedule)
+    
+    log_info(
+        message=f"管理员 [{current_user.id}] 为员工 [{schedule_data.user_id}] 创建排班: {schedule_data.schedule_date}",
+        action="SCHEDULE_CREATED",
+        tourist_id=current_user.id
+    )
+    
+    return db_schedule
+
+
+@attendance_router.post("/schedules/batch", response_model=schemas.BatchScheduleResponse)
+def create_batch_schedules(
+    batch_data: schemas.BatchScheduleCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from datetime import datetime, timedelta
+    
+    work_shift = db.query(models.WorkShift).filter(
+        models.WorkShift.id == batch_data.work_shift_id
+    ).first()
+    if work_shift is None:
+        raise HTTPException(status_code=404, detail="班次不存在")
+    
+    if not batch_data.user_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="员工ID列表不能为空"
+        )
+    
+    invalid_users = []
+    for user_id in batch_data.user_ids:
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        if user is None:
+            invalid_users.append(user_id)
+    
+    if invalid_users:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"以下员工ID不存在: {invalid_users}"
+        )
+    
+    try:
+        start_dt = datetime.strptime(batch_data.start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(batch_data.end_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="日期格式错误，请使用 YYYY-MM-DD 格式"
+        )
+    
+    if start_dt > end_dt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="开始日期不能晚于结束日期"
+        )
+    
+    dates_to_schedule = []
+    current_dt = start_dt
+    while current_dt <= end_dt:
+        if batch_data.exclude_weekends:
+            if current_dt.weekday() < 5:
+                dates_to_schedule.append(current_dt.strftime("%Y-%m-%d"))
+        else:
+            dates_to_schedule.append(current_dt.strftime("%Y-%m-%d"))
+        current_dt += timedelta(days=1)
+    
+    created_count = 0
+    conflict_dates = []
+    conflicts = []
+    
+    for user_id in batch_data.user_ids:
+        for schedule_date in dates_to_schedule:
+            existing = check_schedule_conflict(db, user_id, schedule_date)
+            if existing:
+                conflict_info = f"员工 {user_id} 在 {schedule_date} 已有排班"
+                if conflict_info not in conflicts:
+                    conflicts.append(conflict_info)
+                    conflict_dates.append(schedule_date)
+                continue
+            
+            db_schedule = models.Schedule(
+                user_id=user_id,
+                work_shift_id=batch_data.work_shift_id,
+                schedule_date=schedule_date
+            )
+            db.add(db_schedule)
+            created_count += 1
+    
+    db.commit()
+    
+    log_info(
+        message=f"管理员 [{current_user.id}] 批量排班: 创建 {created_count} 条, 冲突 {len(conflicts)} 条",
+        action="BATCH_SCHEDULE_CREATED",
+        tourist_id=current_user.id
+    )
+    
+    if conflicts:
+        return schemas.BatchScheduleResponse(
+            success=False,
+            message=f"批量排班完成，部分日期存在冲突。已创建 {created_count} 条排班，{len(conflicts)} 个冲突未处理",
+            created_count=created_count,
+            conflict_dates=list(set(conflict_dates))
+        )
+    
+    return schemas.BatchScheduleResponse(
+        success=True,
+        message=f"批量排班成功，共创建 {created_count} 条排班记录",
+        created_count=created_count,
+        conflict_dates=[]
+    )
+
+
+@attendance_router.get("/schedules/check-conflict", response_model=schemas.ScheduleConflictCheck)
+def check_conflict(
+    user_id: int,
+    schedule_date: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    existing = check_schedule_conflict(db, user_id, schedule_date)
+    
+    return schemas.ScheduleConflictCheck(
+        user_id=user_id,
+        schedule_date=schedule_date,
+        has_conflict=existing is not None,
+        existing_schedule=existing
+    )
+
+
+@attendance_router.delete("/schedules/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_schedule(
+    schedule_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    db_schedule = db.query(models.Schedule).filter(
+        models.Schedule.id == schedule_id
+    ).first()
+    if db_schedule is None:
+        raise HTTPException(status_code=404, detail="排班记录不存在")
+    
+    db.delete(db_schedule)
+    db.commit()
+    
+    log_info(
+        message=f"管理员 [{current_user.id}] 删除排班: ID={schedule_id}",
+        action="SCHEDULE_DELETED",
+        tourist_id=current_user.id
+    )
+    
+    return None
+
+
+app.include_router(attendance_router)
+
+
 if __name__ == "__main__":
     import uvicorn
     
