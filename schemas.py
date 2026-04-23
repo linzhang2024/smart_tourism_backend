@@ -7,6 +7,7 @@ from enum import Enum
 class UserRole(str, Enum):
     TOURIST = "TOURIST"
     STAFF = "STAFF"
+    DEPT_ADMIN = "DEPT_ADMIN"
     ADMIN = "ADMIN"
 
 
@@ -48,6 +49,31 @@ class UserResponse(BaseModel):
     is_active: bool
     total_points: int = 0
     member_level: MemberLevel = MemberLevel.NORMAL
+    department_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="部门名称")
+    description: Optional[str] = Field(None, max_length=500, description="部门描述")
+
+
+class DepartmentCreate(DepartmentBase):
+    pass
+
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    is_active: Optional[bool] = None
+
+
+class Department(DepartmentBase):
+    id: int
+    is_active: bool
     created_at: datetime
 
     class Config:
@@ -443,6 +469,7 @@ class WorkShiftBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=50, description="班次名称")
     start_time: str = Field(..., description="开始时间，格式: HH:MM")
     end_time: str = Field(..., description="结束时间，格式: HH:MM")
+    max_staff: Optional[int] = Field(None, ge=1, description="班次最大容量，None 表示无限制")
 
 
 class WorkShiftCreate(WorkShiftBase):
@@ -453,6 +480,7 @@ class WorkShiftUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=50)
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    max_staff: Optional[int] = Field(None, ge=1)
     is_active: Optional[bool] = None
 
 

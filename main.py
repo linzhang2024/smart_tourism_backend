@@ -2066,7 +2066,7 @@ def get_work_shift(
 def create_work_shift(
     shift_data: schemas.WorkShiftCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.DEPT_ADMIN))
 ):
     existing = db.query(models.WorkShift).filter(
         models.WorkShift.name == shift_data.name
@@ -2080,7 +2080,8 @@ def create_work_shift(
     db_shift = models.WorkShift(
         name=shift_data.name,
         start_time=shift_data.start_time,
-        end_time=shift_data.end_time
+        end_time=shift_data.end_time,
+        max_staff=shift_data.max_staff
     )
     db.add(db_shift)
     db.commit()
@@ -2169,12 +2170,120 @@ def delete_work_shift(
     return None
 
 
-def check_schedule_conflict(db: Session, user_id: int, schedule_date: str) -> Optional[models.Schedule]:
-    existing = db.query(models.Schedule).filter(
-        models.Schedule.user_id == user_id,
-        models.Schedule.schedule_date == schedule_date
+def is_shift_over_day(start_time: str, end_time: str) -> bool:
+    start_hour = int(start_time.split(':')[0])
+    end_hour = int(end_time.split(':')[0])
+    return end_hour < start_hour
+
+
+def get_shift_time_range(schedule_date: str, start_time: str, end_time: str) -> tuple:
+    from datetime import datetime, timedelta
+    
+    date_dt = datetime.strptime(schedule_date, "%Y-%m-%d")
+    start_dt = datetime.combine(date_dt.date(), datetime.strptime(start_time, "%H:%M").time())
+    end_dt = datetime.combine(date_dt.date(), datetime.strptime(end_time, "%H:%M").time())
+    
+    if end_dt <= start_dt:
+        end_dt += timedelta(days=1)
+    
+    return (start_dt, end_dt)
+
+
+def check_schedule_conflict(db: Session, user_id: int, schedule_date: str, work_shift_id: int) -> Optional[models.Schedule]:
+    from datetime import datetime, timedelta
+    
+    new_shift = db.query(models.WorkShift).filter(
+        models.WorkShift.id == work_shift_id
     ).first()
-    return existing
+    if new_shift is None:
+        return None
+    
+    new_start, new_end = get_shift_time_range(
+        schedule_date, new_shift.start_time, new_shift.end_time
+    )
+    
+    try:
+        current_dt = datetime.strptime(schedule_date, "%Y-%m-%d")
+        dates_to_check = [
+            (current_dt - timedelta(days=1)).strftime("%Y-%m-%d"),
+            schedule_date,
+            (current_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+        ]
+    except ValueError:
+        return None
+    
+    existing_schedules = db.query(models.Schedule).filter(
+        models.Schedule.user_id == user_id,
+        models.Schedule.schedule_date.in_(dates_to_check)
+    ).all()
+    
+    for existing in existing_schedules:
+        existing_shift = existing.work_shift
+        if existing_shift is None:
+            continue
+        
+        existing_start, existing_end = get_shift_time_range(
+            existing.schedule_date, existing_shift.start_time, existing_shift.end_time
+        )
+        
+        if (new_start < existing_end and new_end > existing_start):
+            return existing
+    
+    return None
+
+
+def check_shift_capacity(db: Session, work_shift_id: int, schedule_date: str, current_count: int = 0) -> tuple:
+    work_shift = db.query(models.WorkShift).filter(
+        models.WorkShift.id == work_shift_id
+    ).first()
+    
+    if work_shift is None or work_shift.max_staff is None:
+        return (True, 0, None)
+    
+    existing_count = db.query(models.Schedule).filter(
+        models.Schedule.work_shift_id == work_shift_id,
+        models.Schedule.schedule_date == schedule_date
+    ).count()
+    
+    total_count = existing_count + current_count
+    
+    if total_count >= work_shift.max_staff:
+        return (False, total_count, work_shift.max_staff)
+    
+    return (True, total_count, work_shift.max_staff)
+
+
+def can_manage_user(current_user: models.User, target_user_id: int, db: Session) -> bool:
+    if current_user.role == models.UserRole.ADMIN:
+        return True
+    
+    if current_user.role == models.UserRole.DEPT_ADMIN:
+        target_user = db.query(models.User).filter(
+            models.User.id == target_user_id
+        ).first()
+        if target_user is None:
+            return False
+        if current_user.department_id is None:
+            return False
+        return target_user.department_id == current_user.department_id
+    
+    return False
+
+
+def get_managed_user_ids(current_user: models.User, db: Session) -> List[int]:
+    if current_user.role == models.UserRole.ADMIN:
+        users = db.query(models.User).all()
+        return [u.id for u in users]
+    
+    if current_user.role == models.UserRole.DEPT_ADMIN:
+        if current_user.department_id is None:
+            return []
+        users = db.query(models.User).filter(
+            models.User.department_id == current_user.department_id
+        ).all()
+        return [u.id for u in users]
+    
+    return [current_user.id]
 
 
 @attendance_router.get("/schedules", response_model=List[schemas.ScheduleWithDetails])
@@ -2189,7 +2298,19 @@ def get_schedules(
 ):
     query = db.query(models.Schedule)
     
+    managed_user_ids = get_managed_user_ids(current_user, db)
+    
+    if current_user.role == models.UserRole.STAFF:
+        query = query.filter(models.Schedule.user_id == current_user.id)
+    else:
+        query = query.filter(models.Schedule.user_id.in_(managed_user_ids))
+    
     if user_id is not None:
+        if current_user.role != models.UserRole.ADMIN and user_id not in managed_user_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权查看该员工的排班"
+            )
         query = query.filter(models.Schedule.user_id == user_id)
     if start_date is not None:
         query = query.filter(models.Schedule.schedule_date >= start_date)
@@ -2222,7 +2343,16 @@ def get_schedules_calendar(
     query = db.query(models.Schedule).filter(
         models.Schedule.schedule_date >= start_date,
         models.Schedule.schedule_date <= end_date
-    ).order_by(
+    )
+    
+    managed_user_ids = get_managed_user_ids(current_user, db)
+    
+    if current_user.role == models.UserRole.STAFF:
+        query = query.filter(models.Schedule.user_id == current_user.id)
+    else:
+        query = query.filter(models.Schedule.user_id.in_(managed_user_ids))
+    
+    query = query.order_by(
         models.Schedule.schedule_date,
         models.Schedule.id
     ).all()
@@ -2234,8 +2364,14 @@ def get_schedules_calendar(
 def create_schedule(
     schedule_data: schemas.ScheduleCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.DEPT_ADMIN))
 ):
+    if not can_manage_user(current_user, schedule_data.user_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权管理该员工的排班"
+        )
+    
     user = db.query(models.User).filter(
         models.User.id == schedule_data.user_id
     ).first()
@@ -2248,11 +2384,18 @@ def create_schedule(
     if work_shift is None:
         raise HTTPException(status_code=404, detail="班次不存在")
     
-    existing = check_schedule_conflict(db, schedule_data.user_id, schedule_data.schedule_date)
+    existing = check_schedule_conflict(db, schedule_data.user_id, schedule_data.schedule_date, schedule_data.work_shift_id)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"该员工在 {schedule_data.schedule_date} 已有排班"
+            detail=f"该员工在 {schedule_data.schedule_date} 已有排班或时间重叠"
+        )
+    
+    has_capacity, current_count, max_staff = check_shift_capacity(db, schedule_data.work_shift_id, schedule_data.schedule_date)
+    if not has_capacity:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"班次 '{work_shift.name}' 在 {schedule_data.schedule_date} 已满（当前: {current_count}, 最大: {max_staff}）"
         )
     
     db_schedule = models.Schedule(
@@ -2277,7 +2420,7 @@ def create_schedule(
 def create_batch_schedules(
     batch_data: schemas.BatchScheduleCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.DEPT_ADMIN))
 ):
     from datetime import datetime, timedelta
     
@@ -2292,6 +2435,13 @@ def create_batch_schedules(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="员工ID列表不能为空"
         )
+    
+    for user_id in batch_data.user_ids:
+        if not can_manage_user(current_user, user_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"无权管理员工 {user_id} 的排班"
+            )
     
     invalid_users = []
     for user_id in batch_data.user_ids:
@@ -2333,15 +2483,28 @@ def create_batch_schedules(
     created_count = 0
     conflict_dates = []
     conflicts = []
+    capacity_issues = []
     
-    for user_id in batch_data.user_ids:
-        for schedule_date in dates_to_schedule:
-            existing = check_schedule_conflict(db, user_id, schedule_date)
+    for schedule_date in dates_to_schedule:
+        date_scheduled_count = 0
+        
+        for user_id in batch_data.user_ids:
+            existing = check_schedule_conflict(db, user_id, schedule_date, batch_data.work_shift_id)
             if existing:
-                conflict_info = f"员工 {user_id} 在 {schedule_date} 已有排班"
+                conflict_info = f"员工 {user_id} 在 {schedule_date} 已有排班或时间重叠"
                 if conflict_info not in conflicts:
                     conflicts.append(conflict_info)
-                    conflict_dates.append(schedule_date)
+                    if schedule_date not in conflict_dates:
+                        conflict_dates.append(schedule_date)
+                continue
+            
+            has_capacity, current_count, max_staff = check_shift_capacity(
+                db, batch_data.work_shift_id, schedule_date, date_scheduled_count
+            )
+            if not has_capacity:
+                capacity_info = f"班次 '{work_shift.name}' 在 {schedule_date} 已满（当前: {current_count}, 最大: {max_staff}）"
+                if capacity_info not in capacity_issues:
+                    capacity_issues.append(capacity_info)
                 continue
             
             db_schedule = models.Schedule(
@@ -2351,19 +2514,21 @@ def create_batch_schedules(
             )
             db.add(db_schedule)
             created_count += 1
+            date_scheduled_count += 1
     
     db.commit()
     
     log_info(
-        message=f"管理员 [{current_user.id}] 批量排班: 创建 {created_count} 条, 冲突 {len(conflicts)} 条",
+        message=f"管理员 [{current_user.id}] 批量排班: 创建 {created_count} 条, 冲突 {len(conflicts)} 条, 容量问题 {len(capacity_issues)} 条",
         action="BATCH_SCHEDULE_CREATED",
         tourist_id=current_user.id
     )
     
-    if conflicts:
+    if conflicts or capacity_issues:
+        all_issues = conflicts + capacity_issues
         return schemas.BatchScheduleResponse(
             success=False,
-            message=f"批量排班完成，部分日期存在冲突。已创建 {created_count} 条排班，{len(conflicts)} 个冲突未处理",
+            message=f"批量排班完成，部分日期存在问题。已创建 {created_count} 条排班，{len(conflicts)} 个冲突，{len(capacity_issues)} 个容量问题",
             created_count=created_count,
             conflict_dates=list(set(conflict_dates))
         )
@@ -2380,10 +2545,11 @@ def create_batch_schedules(
 def check_conflict(
     user_id: int,
     schedule_date: str,
+    work_shift_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_active_user)
 ):
-    existing = check_schedule_conflict(db, user_id, schedule_date)
+    existing = check_schedule_conflict(db, user_id, schedule_date, work_shift_id)
     
     return schemas.ScheduleConflictCheck(
         user_id=user_id,
@@ -2397,13 +2563,19 @@ def check_conflict(
 def delete_schedule(
     schedule_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.DEPT_ADMIN))
 ):
     db_schedule = db.query(models.Schedule).filter(
         models.Schedule.id == schedule_id
     ).first()
     if db_schedule is None:
         raise HTTPException(status_code=404, detail="排班记录不存在")
+    
+    if not can_manage_user(current_user, db_schedule.user_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权删除该排班"
+        )
     
     db.delete(db_schedule)
     db.commit()
