@@ -43,6 +43,7 @@ class OrderStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
     FAILED = "FAILED"
+    REFUNDED = "REFUNDED"
 
 
 class ComplaintStatus(str, Enum):
