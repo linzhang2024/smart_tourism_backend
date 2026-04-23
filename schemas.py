@@ -400,3 +400,40 @@ class DistributorOrderListItem(TicketOrder):
     distributor_id: Optional[int] = None
     commission_amount: Optional[float] = None
     scenic_spot_name: Optional[str] = None
+    is_settled: bool = False
+
+
+class DistributorFinanceReport(BaseModel):
+    distributor_id: int
+    distributor_code: str
+    commission_rate: float
+    
+    total_orders: int
+    total_revenue: float
+    total_commission: float
+    
+    settled_orders: int
+    settled_commission: float
+    
+    pending_orders: int
+    pending_commission: float
+    
+    today_orders: int
+    today_revenue: float
+    today_commission: float
+
+    class Config:
+        from_attributes = True
+
+
+class FinanceOrderItem(BaseModel):
+    order_no: str
+    scenic_spot_name: str
+    order_date: Optional[str] = None
+    quantity: int
+    total_price: float
+    commission_amount: float
+    is_settled: bool
+
+    class Config:
+        from_attributes = True

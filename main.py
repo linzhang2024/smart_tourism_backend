@@ -1896,6 +1896,141 @@ def get_my_distributor_status(
     }
 
 
+@distributor_router.get("/me/finance", response_model=schemas.DistributorFinanceReport)
+def get_distributor_finance(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.user_id == current_user.id,
+        models.Distributor.is_active == True
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您不是有效的分销商"
+        )
+    
+    from sqlalchemy import func, and_
+    from datetime import datetime, date, timedelta
+    
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    
+    total_stats = db.query(
+        func.count(models.TicketOrder.id).label('total_orders'),
+        func.sum(models.TicketOrder.total_price).label('total_revenue'),
+        func.sum(models.TicketOrder.commission_amount).label('total_commission')
+    ).filter(
+        models.TicketOrder.distributor_id == distributor.id,
+        models.TicketOrder.status == models.OrderStatus.PAID
+    ).first()
+    
+    settled_stats = db.query(
+        func.count(models.TicketOrder.id).label('settled_orders'),
+        func.sum(models.TicketOrder.commission_amount).label('settled_commission')
+    ).filter(
+        models.TicketOrder.distributor_id == distributor.id,
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.is_settled == True
+    ).first()
+    
+    pending_stats = db.query(
+        func.count(models.TicketOrder.id).label('pending_orders'),
+        func.sum(models.TicketOrder.commission_amount).label('pending_commission')
+    ).filter(
+        models.TicketOrder.distributor_id == distributor.id,
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.is_settled == False
+    ).first()
+    
+    today_stats = db.query(
+        func.count(models.TicketOrder.id).label('today_orders'),
+        func.sum(models.TicketOrder.total_price).label('today_revenue'),
+        func.sum(models.TicketOrder.commission_amount).label('today_commission')
+    ).filter(
+        models.TicketOrder.distributor_id == distributor.id,
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.created_at >= today_start
+    ).first()
+    
+    log_info(
+        message=f"分销商 [{distributor.id}] 查询财务报表",
+        action="DISTRIBUTOR_FINANCE_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.DistributorFinanceReport(
+        distributor_id=distributor.id,
+        distributor_code=distributor.distributor_code,
+        commission_rate=distributor.commission_rate,
+        total_orders=total_stats.total_orders or 0,
+        total_revenue=total_stats.total_revenue or 0.0,
+        total_commission=total_stats.total_commission or 0.0,
+        settled_orders=settled_stats.settled_orders or 0,
+        settled_commission=settled_stats.settled_commission or 0.0,
+        pending_orders=pending_stats.pending_orders or 0,
+        pending_commission=pending_stats.pending_commission or 0.0,
+        today_orders=today_stats.today_orders or 0,
+        today_revenue=today_stats.today_revenue or 0.0,
+        today_commission=today_stats.today_commission or 0.0
+    )
+
+
+@distributor_router.get("/me/finance/orders", response_model=List[schemas.FinanceOrderItem])
+def get_distributor_finance_orders(
+    is_settled: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    distributor = db.query(models.Distributor).filter(
+        models.Distributor.user_id == current_user.id,
+        models.Distributor.is_active == True
+    ).first()
+    
+    if distributor is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="您不是有效的分销商"
+        )
+    
+    query = db.query(models.TicketOrder).filter(
+        models.TicketOrder.distributor_id == distributor.id,
+        models.TicketOrder.status == models.OrderStatus.PAID
+    )
+    
+    if is_settled is not None:
+        query = query.filter(models.TicketOrder.is_settled == is_settled)
+    
+    orders = query.order_by(
+        models.TicketOrder.created_at.desc()
+    ).offset(skip).limit(limit).all()
+    
+    result = []
+    for order in orders:
+        spot_name = None
+        if order.scenic_spot:
+            spot_name = order.scenic_spot.name
+        
+        order_date = None
+        if order.created_at:
+            order_date = order.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        
+        result.append(schemas.FinanceOrderItem(
+            order_no=order.order_no,
+            scenic_spot_name=spot_name,
+            order_date=order_date,
+            quantity=order.quantity,
+            total_price=order.total_price,
+            commission_amount=order.commission_amount,
+            is_settled=order.is_settled
+        ))
+    
+    return result
+
+
 app.include_router(distributor_router)
 
 

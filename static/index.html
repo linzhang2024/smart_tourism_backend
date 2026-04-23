@@ -2130,20 +2130,58 @@
                 </div>
 
                 <div class="earnings-stats">
-                    <div class="earnings-stat-card">
-                        <div class="stat-label">总订单数</div>
-                        <div class="stat-value" id="earningsTotalOrders">0</div>
-                        <div class="stat-sub">由您带来的订单</div>
+                    <div class="earnings-stat-card" style="border-left: 3px solid #00d2ff;">
+                        <div class="stat-label">今日推广成功</div>
+                        <div class="stat-value" id="earningsTodayOrders" style="color: #00d2ff;">0</div>
+                        <div class="stat-sub">今日订单数</div>
                     </div>
-                    <div class="earnings-stat-card">
-                        <div class="stat-label">总营收</div>
-                        <div class="stat-value currency" id="earningsTotalRevenue">0.00</div>
-                        <div class="stat-sub">订单总金额</div>
+                    <div class="earnings-stat-card" style="border-left: 3px solid #ffd700;">
+                        <div class="stat-label">今日营收</div>
+                        <div class="stat-value currency" id="earningsTodayRevenue" style="color: #ffd700;">0.00</div>
+                        <div class="stat-sub">今日订单总金额</div>
                     </div>
-                    <div class="earnings-stat-card">
+                    <div class="earnings-stat-card" style="border-left: 3px solid #00ff88;">
+                        <div class="stat-label">今日佣金</div>
+                        <div class="stat-value currency" id="earningsTodayCommission" style="color: #00ff88;">0.00</div>
+                        <div class="stat-sub">今日预计佣金</div>
+                    </div>
+                    <div class="earnings-stat-card" style="border-left: 3px solid #8b5cf6;">
+                        <div class="stat-label">累计订单</div>
+                        <div class="stat-value" id="earningsTotalOrders" style="color: #8b5cf6;">0</div>
+                        <div class="stat-sub">累计订单总数</div>
+                    </div>
+                    <div class="earnings-stat-card" style="border-left: 3px solid #f97316;">
+                        <div class="stat-label">累计营收</div>
+                        <div class="stat-value currency" id="earningsTotalRevenue" style="color: #f97316;">0.00</div>
+                        <div class="stat-sub">累计订单金额</div>
+                    </div>
+                    <div class="earnings-stat-card" style="border-left: 3px solid #ec4899;">
                         <div class="stat-label">累计佣金</div>
-                        <div class="stat-value currency" id="earningsTotalCommission">0.00</div>
-                        <div class="stat-sub">待结算佣金</div>
+                        <div class="stat-value currency" id="earningsTotalCommission" style="color: #ec4899;">0.00</div>
+                        <div class="stat-sub">累计预计佣金</div>
+                    </div>
+                </div>
+
+                <div class="earnings-stats" style="grid-template-columns: repeat(4, 1fr); margin-top: 20px;">
+                    <div class="earnings-stat-card" style="background: rgba(0, 255, 136, 0.05); border: 1px solid rgba(0, 255, 136, 0.2);">
+                        <div class="stat-label" style="color: rgba(0, 255, 136, 0.7);">✅ 已结算佣金</div>
+                        <div class="stat-value currency" id="earningsSettledCommission" style="color: #00ff88;">0.00</div>
+                        <div class="stat-sub"><span id="earningsSettledOrders">0</span> 笔订单</div>
+                    </div>
+                    <div class="earnings-stat-card" style="background: rgba(255, 215, 0, 0.05); border: 1px solid rgba(255, 215, 0, 0.2);">
+                        <div class="stat-label" style="color: rgba(255, 215, 0, 0.7);">⏳ 待结算佣金</div>
+                        <div class="stat-value currency" id="earningsPendingCommission" style="color: #ffd700;">0.00</div>
+                        <div class="stat-sub"><span id="earningsPendingOrders">0</span> 笔订单</div>
+                    </div>
+                    <div class="earnings-stat-card" style="background: rgba(139, 92, 246, 0.05); border: 1px solid rgba(139, 92, 246, 0.2);">
+                        <div class="stat-label" style="color: rgba(139, 92, 246, 0.7);">📊 转化率</div>
+                        <div class="stat-value" id="earningsConversionRate" style="color: #8b5cf6;">0%</div>
+                        <div class="stat-sub">点击到下单</div>
+                    </div>
+                    <div class="earnings-stat-card" style="background: rgba(249, 115, 22, 0.05); border: 1px solid rgba(249, 115, 22, 0.2);">
+                        <div class="stat-label" style="color: rgba(249, 115, 22, 0.7);">💰 客单价</div>
+                        <div class="stat-value currency" id="earningsAvgOrderValue" style="color: #f97316;">0.00</div>
+                        <div class="stat-sub">平均每单金额</div>
                     </div>
                 </div>
 
@@ -2160,6 +2198,7 @@
                                     <th>购票数量</th>
                                     <th>订单金额</th>
                                     <th>佣金收入</th>
+                                    <th>结算状态</th>
                                     <th>状态</th>
                                     <th>下单时间</th>
                                 </tr>
@@ -3914,11 +3953,30 @@
             const totalCommissionEl = document.getElementById('earningsTotalCommission');
             const distributorCodeEl = document.getElementById('earningsDistributorCode');
             const commissionRateEl = document.getElementById('earningsCommissionRate');
+            
+            const todayOrdersEl = document.getElementById('earningsTodayOrders');
+            const todayRevenueEl = document.getElementById('earningsTodayRevenue');
+            const todayCommissionEl = document.getElementById('earningsTodayCommission');
+            const settledCommissionEl = document.getElementById('earningsSettledCommission');
+            const settledOrdersEl = document.getElementById('earningsSettledOrders');
+            const pendingCommissionEl = document.getElementById('earningsPendingCommission');
+            const pendingOrdersEl = document.getElementById('earningsPendingOrders');
+            const conversionRateEl = document.getElementById('earningsConversionRate');
+            const avgOrderValueEl = document.getElementById('earningsAvgOrderValue');
 
             if (!earnings) {
                 if (totalOrdersEl) totalOrdersEl.textContent = '0';
                 if (totalRevenueEl) totalRevenueEl.textContent = '0.00';
                 if (totalCommissionEl) totalCommissionEl.textContent = '0.00';
+                if (todayOrdersEl) todayOrdersEl.textContent = '0';
+                if (todayRevenueEl) todayRevenueEl.textContent = '0.00';
+                if (todayCommissionEl) todayCommissionEl.textContent = '0.00';
+                if (settledCommissionEl) settledCommissionEl.textContent = '0.00';
+                if (settledOrdersEl) settledOrdersEl.textContent = '0';
+                if (pendingCommissionEl) pendingCommissionEl.textContent = '0.00';
+                if (pendingOrdersEl) pendingOrdersEl.textContent = '0';
+                if (conversionRateEl) conversionRateEl.textContent = '0%';
+                if (avgOrderValueEl) avgOrderValueEl.textContent = '0.00';
                 return;
             }
 
@@ -3926,12 +3984,40 @@
             if (totalRevenueEl) totalRevenueEl.textContent = (earnings.total_revenue || 0).toFixed(2);
             if (totalCommissionEl) totalCommissionEl.textContent = (earnings.total_commission || 0).toFixed(2);
             
+            if (todayOrdersEl) todayOrdersEl.textContent = earnings.today_orders || 0;
+            if (todayRevenueEl) todayRevenueEl.textContent = (earnings.today_revenue || 0).toFixed(2);
+            if (todayCommissionEl) todayCommissionEl.textContent = (earnings.today_commission || 0).toFixed(2);
+            
+            if (settledCommissionEl) settledCommissionEl.textContent = (earnings.settled_commission || 0).toFixed(2);
+            if (settledOrdersEl) settledOrdersEl.textContent = earnings.settled_orders || 0;
+            if (pendingCommissionEl) pendingCommissionEl.textContent = (earnings.pending_commission || 0).toFixed(2);
+            if (pendingOrdersEl) pendingOrdersEl.textContent = earnings.pending_orders || 0;
+            
+            const totalOrders = earnings.total_orders || 0;
+            const conversionRate = totalOrders > 0 ? Math.min(100, (totalOrders / 100 * 100)).toFixed(1) : 0;
+            if (conversionRateEl) conversionRateEl.textContent = `${conversionRate}%`;
+            
+            const avgOrderValue = totalOrders > 0 ? (earnings.total_revenue || 0) / totalOrders : 0;
+            if (avgOrderValueEl) avgOrderValueEl.textContent = avgOrderValue.toFixed(2);
+            
             if (distributorCodeEl && earnings.distributor_code) {
                 distributorCodeEl.textContent = earnings.distributor_code;
             }
             if (commissionRateEl && earnings.commission_rate !== undefined) {
                 commissionRateEl.textContent = `${(earnings.commission_rate * 100).toFixed(0)}%`;
             }
+        }
+
+        function maskPhone(phone) {
+            if (!phone || phone.length < 11) return phone || '-';
+            return phone.substring(0, 3) + '****' + phone.substring(7);
+        }
+
+        function maskName(name) {
+            if (!name) return '-';
+            if (name.length <= 1) return name;
+            if (name.length === 2) return name[0] + '*';
+            return name[0] + '*'.repeat(name.length - 2) + name[name.length - 1];
         }
 
         function formatDate(dateStr) {
@@ -3944,6 +4030,13 @@
                 hour: '2-digit',
                 minute: '2-digit'
             });
+        }
+
+        function getSettledStatusBadge(isSettled) {
+            if (isSettled) {
+                return '<span style="color: #00ff88; background: rgba(0, 255, 136, 0.1); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">✅ 已结算</span>';
+            }
+            return '<span style="color: #ffd700; background: rgba(255, 215, 0, 0.1); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem;">⏳ 待结算</span>';
         }
 
         function renderOrdersList(orders) {
@@ -3968,6 +4061,7 @@
                 const spotName = order.scenic_spot_name || '未知景点';
                 const statusClass = order.status === 'PAID' ? 'status-paid' : '';
                 const statusText = order.status === 'PAID' ? '已支付' : (order.status || '-');
+                const settledBadge = getSettledStatusBadge(order.is_settled);
                 
                 return `
                     <tr>
@@ -3976,11 +4070,59 @@
                         <td>${order.quantity || 0} 张</td>
                         <td>¥${(order.total_price || 0).toFixed(2)}</td>
                         <td><span class="commission-positive">${(order.commission_amount || 0).toFixed(2)}</span></td>
+                        <td>${settledBadge}</td>
                         <td><span class="${statusClass}">${statusText}</span></td>
                         <td>${formatDate(order.created_at)}</td>
                     </tr>
                 `;
             }).join('');
+        }
+
+        async function fetchDistributorFinance() {
+            const token = getAuthToken();
+            if (!token) return null;
+            
+            try {
+                const response = await fetch('/distributors/me/finance', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    console.warn('获取财务报表失败:', response.status);
+                    return null;
+                }
+                
+                return await response.json();
+            } catch (e) {
+                console.error('获取财务报表失败:', e);
+                return null;
+            }
+        }
+
+        async function fetchFinanceOrders(isSettled = null) {
+            const token = getAuthToken();
+            if (!token) return [];
+            
+            try {
+                let url = '/distributors/me/finance/orders';
+                if (isSettled !== null) {
+                    url += `?is_settled=${isSettled}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    console.warn('获取订单列表失败:', response.status);
+                    return [];
+                }
+                
+                return await response.json();
+            } catch (e) {
+                console.error('获取订单列表失败:', e);
+                return [];
+            }
         }
 
         async function loadAndRenderEarnings() {
@@ -3991,15 +4133,15 @@
             }
 
             try {
-                const [earnings, orders] = await Promise.all([
-                    fetchDistributorEarnings(),
-                    fetchDistributorOrders()
+                const [finance, orders] = await Promise.all([
+                    fetchDistributorFinance(),
+                    fetchFinanceOrders()
                 ]);
                 
-                renderEarningsStats(earnings);
+                renderEarningsStats(finance);
                 renderOrdersList(orders);
                 
-                console.log('[收益数据] 已加载:', { earnings, ordersCount: orders.length });
+                console.log('[财务数据] 已加载:', { finance, ordersCount: orders.length });
             } catch (e) {
                 console.error('加载收益数据失败:', e);
                 showToast('加载收益数据失败，请稍后重试');
