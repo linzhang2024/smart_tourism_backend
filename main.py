@@ -2589,6 +2589,446 @@ def delete_schedule(
     return None
 
 
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    import math
+    
+    R = 6371000.0
+    
+    lat1_rad = math.radians(lat1)
+    lon1_rad = math.radians(lon1)
+    lat2_rad = math.radians(lat2)
+    lon2_rad = math.radians(lon2)
+    
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+    
+    a = math.sin(dlat / 2) ** 2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    
+    return R * c
+
+
+def is_within_geofence(
+    check_lat: float,
+    check_lon: float,
+    spot_lat: Optional[float],
+    spot_lon: Optional[float],
+    spot_radius: Optional[float]
+) -> tuple:
+    if spot_lat is None or spot_lon is None or spot_radius is None:
+        return (True, 0.0)
+    
+    distance = calculate_distance(check_lat, check_lon, spot_lat, spot_lon)
+    is_within = distance <= spot_radius
+    return (is_within, distance)
+
+
+def get_or_create_attendance_record(
+    db: Session,
+    user_id: int,
+    attendance_date: str,
+    schedule: Optional[models.Schedule] = None
+) -> models.AttendanceRecord:
+    record = db.query(models.AttendanceRecord).filter(
+        models.AttendanceRecord.user_id == user_id,
+        models.AttendanceRecord.attendance_date == attendance_date
+    ).first()
+    
+    if record is None:
+        record = models.AttendanceRecord(
+            user_id=user_id,
+            attendance_date=attendance_date,
+            schedule_id=schedule.id if schedule else None,
+            attendance_status=models.AttendanceStatus.ABSENT
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+    
+    return record
+
+
+def calculate_attendance_status(
+    check_in_time: Optional[datetime],
+    check_out_time: Optional[datetime],
+    shift_start_time: Optional[str],
+    shift_end_time: Optional[str],
+    attendance_date: str
+) -> models.AttendanceStatus:
+    from datetime import datetime, timedelta
+    
+    if check_in_time is None:
+        return models.AttendanceStatus.ABSENT
+    
+    if shift_start_time is None or shift_end_time is None:
+        return models.AttendanceStatus.NORMAL
+    
+    try:
+        date_dt = datetime.strptime(attendance_date, "%Y-%m-%d")
+        shift_start_dt = datetime.combine(date_dt.date(), datetime.strptime(shift_start_time, "%H:%M").time())
+        shift_end_dt = datetime.combine(date_dt.date(), datetime.strptime(shift_end_time, "%H:%M").time())
+        
+        if shift_end_dt <= shift_start_dt:
+            shift_end_dt += timedelta(days=1)
+        
+        late_threshold = shift_start_dt + timedelta(minutes=15)
+        
+        is_late = check_in_time > late_threshold
+        
+        if check_out_time is not None:
+            early_leave_threshold = shift_end_dt - timedelta(minutes=15)
+            is_early_leave = check_out_time < early_leave_threshold
+        else:
+            is_early_leave = False
+        
+        if is_late and is_early_leave:
+            return models.AttendanceStatus.LATE
+        elif is_late:
+            return models.AttendanceStatus.LATE
+        elif is_early_leave:
+            return models.AttendanceStatus.EARLY_LEAVE
+        else:
+            return models.AttendanceStatus.NORMAL
+            
+    except Exception as e:
+        return models.AttendanceStatus.NORMAL
+
+
+def update_attendance_record_status(
+    db: Session,
+    record: models.AttendanceRecord,
+    schedule: Optional[models.Schedule] = None
+) -> models.AttendanceRecord:
+    if schedule is None and record.schedule_id:
+        schedule = db.query(models.Schedule).filter(
+            models.Schedule.id == record.schedule_id
+        ).first()
+    
+    if schedule is None:
+        if record.check_in_time is not None:
+            record.attendance_status = models.AttendanceStatus.NORMAL
+        db.commit()
+        db.refresh(record)
+        return record
+    
+    work_shift = schedule.work_shift
+    if work_shift is None:
+        if record.check_in_time is not None:
+            record.attendance_status = models.AttendanceStatus.NORMAL
+        db.commit()
+        db.refresh(record)
+        return record
+    
+    new_status = calculate_attendance_status(
+        check_in_time=record.check_in_time,
+        check_out_time=record.check_out_time,
+        shift_start_time=work_shift.start_time,
+        shift_end_time=work_shift.end_time,
+        attendance_date=record.attendance_date
+    )
+    
+    if not record.is_approved:
+        record.attendance_status = new_status
+    
+    db.commit()
+    db.refresh(record)
+    return record
+
+
+@attendance_router.post("/check-in", response_model=schemas.AttendanceRecordWithDetails)
+def check_in(
+    check_in_data: schemas.CheckInCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    from datetime import datetime
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
+    
+    schedule = db.query(models.Schedule).filter(
+        models.Schedule.user_id == current_user.id,
+        models.Schedule.schedule_date == today
+    ).first()
+    
+    scenic_spot = None
+    if check_in_data.scenic_spot_id is not None:
+        scenic_spot = db.query(models.ScenicSpot).filter(
+            models.ScenicSpot.id == check_in_data.scenic_spot_id
+        ).first()
+    
+    location_status = models.AttendanceLocationStatus.NORMAL
+    distance = 0.0
+    
+    if scenic_spot and scenic_spot.latitude is not None and scenic_spot.longitude is not None:
+        is_within, distance = is_within_geofence(
+            check_lat=check_in_data.latitude,
+            check_lon=check_in_data.longitude,
+            spot_lat=scenic_spot.latitude,
+            spot_lon=scenic_spot.longitude,
+            spot_radius=scenic_spot.geofence_radius
+        )
+        if not is_within:
+            location_status = models.AttendanceLocationStatus.OUT_OF_RANGE
+    
+    record = get_or_create_attendance_record(db, current_user.id, today, schedule)
+    
+    if record.check_in_time is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="今日已打卡上班"
+        )
+    
+    record.check_in_time = now
+    record.check_in_latitude = check_in_data.latitude
+    record.check_in_longitude = check_in_data.longitude
+    record.check_in_location_status = location_status
+    record.scenic_spot_id = check_in_data.scenic_spot_id
+    
+    if schedule:
+        record.schedule_id = schedule.id
+    
+    record = update_attendance_record_status(db, record, schedule)
+    
+    log_info(
+        message=f"员工 [{current_user.id}] 上班打卡: 时间={now}, 位置状态={location_status}, 距离={distance:.2f}米",
+        action="CHECK_IN",
+        tourist_id=current_user.id
+    )
+    
+    return record
+
+
+@attendance_router.post("/check-out", response_model=schemas.AttendanceRecordWithDetails)
+def check_out(
+    check_out_data: schemas.CheckOutCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    from datetime import datetime
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
+    
+    record = db.query(models.AttendanceRecord).filter(
+        models.AttendanceRecord.user_id == current_user.id,
+        models.AttendanceRecord.attendance_date == today
+    ).first()
+    
+    if record is None or record.check_in_time is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="今日未打卡上班，无法打卡下班"
+        )
+    
+    if record.check_out_time is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="今日已打卡下班"
+        )
+    
+    scenic_spot = None
+    if check_out_data.scenic_spot_id is not None:
+        scenic_spot = db.query(models.ScenicSpot).filter(
+            models.ScenicSpot.id == check_out_data.scenic_spot_id
+        ).first()
+    
+    location_status = models.AttendanceLocationStatus.NORMAL
+    distance = 0.0
+    
+    if scenic_spot and scenic_spot.latitude is not None and scenic_spot.longitude is not None:
+        is_within, distance = is_within_geofence(
+            check_lat=check_out_data.latitude,
+            check_lon=check_out_data.longitude,
+            spot_lat=scenic_spot.latitude,
+            spot_lon=scenic_spot.longitude,
+            spot_radius=scenic_spot.geofence_radius
+        )
+        if not is_within:
+            location_status = models.AttendanceLocationStatus.OUT_OF_RANGE
+    
+    record.check_out_time = now
+    record.check_out_latitude = check_out_data.latitude
+    record.check_out_longitude = check_out_data.longitude
+    record.check_out_location_status = location_status
+    
+    schedule = None
+    if record.schedule_id:
+        schedule = db.query(models.Schedule).filter(
+            models.Schedule.id == record.schedule_id
+        ).first()
+    
+    record = update_attendance_record_status(db, record, schedule)
+    
+    log_info(
+        message=f"员工 [{current_user.id}] 下班打卡: 时间={now}, 位置状态={location_status}, 距离={distance:.2f}米",
+        action="CHECK_OUT",
+        tourist_id=current_user.id
+    )
+    
+    return record
+
+
+@attendance_router.get("/attendance-records", response_model=List[schemas.AttendanceRecordWithDetails])
+def get_attendance_records(
+    user_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    attendance_status: Optional[schemas.AttendanceStatus] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    query = db.query(models.AttendanceRecord)
+    
+    managed_user_ids = get_managed_user_ids(current_user, db)
+    
+    if current_user.role == models.UserRole.STAFF:
+        query = query.filter(models.AttendanceRecord.user_id == current_user.id)
+    else:
+        query = query.filter(models.AttendanceRecord.user_id.in_(managed_user_ids))
+    
+    if user_id is not None:
+        if current_user.role != models.UserRole.ADMIN and user_id not in managed_user_ids:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权查看该员工的考勤记录"
+            )
+        query = query.filter(models.AttendanceRecord.user_id == user_id)
+    
+    if start_date is not None:
+        query = query.filter(models.AttendanceRecord.attendance_date >= start_date)
+    if end_date is not None:
+        query = query.filter(models.AttendanceRecord.attendance_date <= end_date)
+    
+    if attendance_status is not None:
+        query = query.filter(models.AttendanceRecord.attendance_status == attendance_status)
+    
+    records = query.order_by(
+        models.AttendanceRecord.attendance_date.desc(),
+        models.AttendanceRecord.check_in_time.desc()
+    ).offset(skip).limit(limit).all()
+    
+    return records
+
+
+@attendance_router.get("/attendance-alerts", response_model=List[schemas.AttendanceAlertResponse])
+def get_attendance_alerts(
+    date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.DEPT_ADMIN))
+):
+    from datetime import datetime
+    
+    if date is None:
+        date = datetime.now().strftime("%Y-%m-%d")
+    
+    query = db.query(models.AttendanceRecord).filter(
+        models.AttendanceRecord.attendance_date == date
+    )
+    
+    managed_user_ids = get_managed_user_ids(current_user, db)
+    query = query.filter(models.AttendanceRecord.user_id.in_(managed_user_ids))
+    
+    abnormal_records = query.filter(
+        models.AttendanceRecord.attendance_status != models.AttendanceStatus.NORMAL
+    ).all()
+    
+    result = []
+    for record in abnormal_records:
+        username = record.user.username if record.user else "Unknown"
+        result.append(schemas.AttendanceAlertResponse(
+            record_id=record.id,
+            user_id=record.user_id,
+            username=username,
+            attendance_date=record.attendance_date,
+            attendance_status=record.attendance_status,
+            check_in_location_status=record.check_in_location_status,
+            check_out_location_status=record.check_out_location_status,
+            check_in_time=record.check_in_time,
+            check_out_time=record.check_out_time,
+            is_approved=record.is_approved,
+            remark=record.remark
+        ))
+    
+    return result
+
+
+@attendance_router.post("/attendance-approve", response_model=schemas.AttendanceRecordWithDetails)
+def approve_attendance(
+    approve_data: schemas.AttendanceManualApprove,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.DEPT_ADMIN))
+):
+    from datetime import datetime
+    
+    record = db.query(models.AttendanceRecord).filter(
+        models.AttendanceRecord.id == approve_data.record_id
+    ).first()
+    
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="考勤记录不存在"
+        )
+    
+    if not can_manage_user(current_user, record.user_id, db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="无权审批该员工的考勤"
+        )
+    
+    record.attendance_status = approve_data.new_status
+    record.is_approved = True
+    record.approved_by = current_user.id
+    record.approved_at = datetime.now()
+    record.remark = approve_data.remark
+    
+    db.commit()
+    db.refresh(record)
+    
+    log_info(
+        message=f"管理员 [{current_user.id}] 审批考勤记录: 记录ID={record.id}, 新状态={approve_data.new_status}",
+        action="ATTENDANCE_APPROVED",
+        tourist_id=current_user.id
+    )
+    
+    return record
+
+
+@attendance_router.get("/attendance-records/{record_id}", response_model=schemas.AttendanceRecordWithDetails)
+def get_attendance_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    record = db.query(models.AttendanceRecord).filter(
+        models.AttendanceRecord.id == record_id
+    ).first()
+    
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="考勤记录不存在"
+        )
+    
+    if current_user.role == models.UserRole.STAFF:
+        if record.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权查看该考勤记录"
+            )
+    else:
+        if not can_manage_user(current_user, record.user_id, db):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="无权查看该考勤记录"
+            )
+    
+    return record
+
+
 app.include_router(attendance_router)
 
 
