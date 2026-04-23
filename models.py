@@ -1,4 +1,6 @@
 import uuid
+import random
+import string
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, Enum as SQLEnum, Boolean
 from sqlalchemy.orm import relationship
 from database import Base
@@ -11,6 +13,17 @@ def get_utc8_now():
     utc8_offset = timedelta(hours=8)
     utc8_time = utc_now.astimezone(timezone(utc8_offset))
     return utc8_time.replace(tzinfo=None)
+
+
+def get_default_expires_at():
+    return datetime.utcnow() + timedelta(days=365)
+
+
+def generate_redemption_code(length: int = 12) -> str:
+    prefix = "CP"
+    chars = string.ascii_uppercase + string.digits
+    random_part = ''.join(random.choices(chars, k=length - 2))
+    return prefix + random_part
 
 
 class UserRole(str, Enum):
@@ -147,6 +160,8 @@ class PointLog(Base):
     points_change = Column(Integer, nullable=False)
     reason = Column(String(200), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, default=get_default_expires_at)
+    is_expired = Column(Boolean, default=False)
 
     user = relationship("User", back_populates="point_logs")
 
@@ -168,8 +183,11 @@ class UserCoupon(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     coupon_id = Column(Integer, ForeignKey("coupons.id"), nullable=False)
+    redemption_code = Column(String(20), unique=True, nullable=False, default=generate_redemption_code)
     is_used = Column(Boolean, default=False)
     obtained_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, default=get_default_expires_at)
     used_at = Column(DateTime, nullable=True)
+    used_order_id = Column(Integer, ForeignKey("ticket_orders.id"), nullable=True)
 
     coupon = relationship("Coupon")
