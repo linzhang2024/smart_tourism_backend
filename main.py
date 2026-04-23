@@ -207,6 +207,19 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN remained_inventory INTEGER DEFAULT 100"))
                 print("[迁移] 完成!")
             
+            result = conn.execute(text("PRAGMA table_info(users)"))
+            columns = [row[1] for row in result]
+            
+            if 'total_points' not in columns:
+                print("[迁移] 添加 total_points 列到 users 表...")
+                conn.execute(text("ALTER TABLE users ADD COLUMN total_points INTEGER DEFAULT 0"))
+                print("[迁移] 完成!")
+            
+            if 'member_level' not in columns:
+                print("[迁移] 添加 member_level 列到 users 表...")
+                conn.execute(text("ALTER TABLE users ADD COLUMN member_level VARCHAR(20) DEFAULT '普通'"))
+                print("[迁移] 完成!")
+            
             conn.commit()
         except Exception as e:
             print(f"[迁移] 警告: {e}")
@@ -784,8 +797,30 @@ def purchase_ticket(
             scenic_spot_id=order_data.scenic_spot_id
         )
         
+        points_earned = int(total_price)
+        
+        user.total_points += points_earned
+        
+        update_member_level(user)
+        
+        point_log = models.PointLog(
+            user_id=order_data.user_id,
+            points_change=points_earned,
+            reason=f"购票成功获得积分，订单号: {order.order_no}"
+        )
+        db.add(point_log)
+        
+        log_info(
+            message=f"用户 [{order_data.user_id}] 获得积分: {points_earned}，当前总积分: {user.total_points}",
+            action="POINTS_EARNED",
+            order_id=order.order_no,
+            tourist_id=order_data.user_id,
+            quantity=points_earned
+        )
+        
         db.commit()
         db.refresh(order)
+        db.refresh(user)
         
         invalidate_scenic_spot_cache(order_data.scenic_spot_id)
         
@@ -887,6 +922,15 @@ def get_time_ago(dt: datetime) -> str:
     else:
         days = int(seconds // 86400)
         return f"{days} 天前"
+
+
+def update_member_level(user: models.User):
+    if user.total_points >= 5000:
+        user.member_level = models.MemberLevel.GOLD
+    elif user.total_points >= 1000:
+        user.member_level = models.MemberLevel.SILVER
+    else:
+        user.member_level = models.MemberLevel.NORMAL
 
 
 @app.get("/tickets/recent-success", response_model=List[schemas.TicketSuccessBrief], tags=["门票支付"])
@@ -1041,6 +1085,26 @@ def update_complaint(
     db.commit()
     db.refresh(complaint)
     return complaint
+
+
+@app.get("/member/profile", response_model=schemas.MemberProfileResponse, tags=["会员积分"])
+def get_member_profile(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    recent_logs = db.query(models.PointLog).filter(
+        models.PointLog.user_id == current_user.id
+    ).order_by(
+        models.PointLog.created_at.desc()
+    ).limit(5).all()
+    
+    return schemas.MemberProfileResponse(
+        user_id=current_user.id,
+        username=current_user.username,
+        member_level=current_user.member_level,
+        total_points=current_user.total_points,
+        recent_logs=recent_logs
+    )
 
 
 if __name__ == "__main__":

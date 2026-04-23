@@ -10,6 +10,12 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"
 
 
+class MemberLevel(str, Enum):
+    NORMAL = "普通"
+    SILVER = "白银"
+    GOLD = "黄金"
+
+
 class OrderStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
@@ -40,6 +46,8 @@ class UserResponse(BaseModel):
     role: UserRole
     phone: Optional[str]
     is_active: bool
+    total_points: int = 0
+    member_level: MemberLevel = MemberLevel.NORMAL
     created_at: datetime
 
     class Config:
@@ -262,3 +270,25 @@ class Complaint(BaseModel):
 
 class ComplaintWithUser(Complaint):
     user: Optional[UserResponse] = None
+
+
+class PointLog(BaseModel):
+    id: int
+    user_id: int
+    points_change: int
+    reason: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class MemberProfileResponse(BaseModel):
+    user_id: int
+    username: str
+    member_level: MemberLevel
+    total_points: int
+    recent_logs: List[PointLog]
+
+    class Config:
+        from_attributes = True

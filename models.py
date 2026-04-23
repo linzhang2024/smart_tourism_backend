@@ -19,6 +19,12 @@ class UserRole(str, Enum):
     ADMIN = "ADMIN"
 
 
+class MemberLevel(str, Enum):
+    NORMAL = "普通"
+    SILVER = "白银"
+    GOLD = "黄金"
+
+
 class OrderStatus(str, Enum):
     PENDING = "PENDING"
     PAID = "PAID"
@@ -40,9 +46,12 @@ class User(Base):
     role = Column(SQLEnum(UserRole), default=UserRole.TOURIST, nullable=False)
     phone = Column(String(20))
     is_active = Column(Boolean, default=True)
+    total_points = Column(Integer, default=0)
+    member_level = Column(SQLEnum(MemberLevel), default=MemberLevel.NORMAL)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     orders = relationship("TicketOrder", back_populates="user")
+    point_logs = relationship("PointLog", back_populates="user")
 
 
 class TicketOrder(Base):
@@ -128,3 +137,15 @@ class Complaint(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     user = relationship("User")
+
+
+class PointLog(Base):
+    __tablename__ = "point_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    points_change = Column(Integer, nullable=False)
+    reason = Column(String(200), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="point_logs")
