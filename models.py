@@ -29,6 +29,7 @@ def generate_redemption_code(length: int = 12) -> str:
 class UserRole(str, Enum):
     TOURIST = "TOURIST"
     STAFF = "STAFF"
+    DEPT_ADMIN = "DEPT_ADMIN"
     ADMIN = "ADMIN"
 
 
@@ -50,6 +51,18 @@ class ComplaintStatus(str, Enum):
     RESOLVED = "已解决"
 
 
+class Department(Base):
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(String(500))
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    users = relationship("User", back_populates="department")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -61,10 +74,12 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     total_points = Column(Integer, default=0)
     member_level = Column(SQLEnum(MemberLevel), default=MemberLevel.NORMAL)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     orders = relationship("TicketOrder", back_populates="user")
     point_logs = relationship("PointLog", back_populates="user")
+    department = relationship("Department", back_populates="users")
 
 
 class TicketOrder(Base):
@@ -225,6 +240,7 @@ class WorkShift(Base):
     name = Column(String(50), nullable=False, unique=True)
     start_time = Column(String(10), nullable=False)
     end_time = Column(String(10), nullable=False)
+    max_staff = Column(Integer, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
