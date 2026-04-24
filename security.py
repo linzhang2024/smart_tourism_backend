@@ -126,13 +126,22 @@ def mask_sensitive_data(data: Any, fields: Dict[str, str] = None) -> Any:
             'email': 'email',
             'bank_account': 'bank_account',
             'location': 'location',
+            'mobile': 'phone',
+            'telephone': 'phone',
+            'idcard': 'id_card',
+            'id_no': 'id_card',
+            'identity': 'id_card',
         }
+    
+    if data is None:
+        return None
     
     if isinstance(data, dict):
         result = {}
         for key, value in data.items():
-            if key in fields:
-                field_type = fields[key]
+            key_lower = key.lower()
+            if key_lower in fields:
+                field_type = fields[key_lower]
                 if field_type == 'phone':
                     result[key] = mask_phone(value)
                 elif field_type == 'id_card':
@@ -144,22 +153,43 @@ def mask_sensitive_data(data: Any, fields: Dict[str, str] = None) -> Any:
                 elif field_type == 'location':
                     result[key] = mask_location(value)
                 else:
-                    result[key] = value
+                    result[key] = mask_sensitive_data(value, fields)
             else:
                 result[key] = mask_sensitive_data(value, fields)
         return result
     elif isinstance(data, list):
         return [mask_sensitive_data(item, fields) for item in data]
+    elif hasattr(data, 'model_dump'):
+        try:
+            data_dict = data.model_dump()
+            masked_dict = mask_sensitive_data(data_dict, fields)
+            for key, value in masked_dict.items():
+                if hasattr(data, key):
+                    try:
+                        setattr(data, key, value)
+                    except Exception:
+                        pass
+            return data
+        except Exception:
+            pass
     elif hasattr(data, '__dict__'):
-        obj_dict = mask_sensitive_data(data.__dict__, fields)
-        for key, value in obj_dict.items():
-            if hasattr(data, key):
-                try:
-                    setattr(data, key, value)
-                except Exception:
-                    pass
-        return data
+        try:
+            obj_dict = dict(data.__dict__)
+            masked_dict = mask_sensitive_data(obj_dict, fields)
+            for key, value in masked_dict.items():
+                if hasattr(data, key) and not key.startswith('_'):
+                    try:
+                        setattr(data, key, value)
+                    except Exception:
+                        pass
+            return data
+        except Exception:
+            pass
     return data
+
+
+def mask_response_content(content: Any) -> Any:
+    return mask_sensitive_data(content)
 
 
 class RateLimiter:
@@ -384,6 +414,13 @@ class AuditLogManager:
         with self._lock:
             self._db_session = db_session
     
+    def _get_new_session(self):
+        try:
+            from database import SessionLocal
+            return SessionLocal()
+        except Exception:
+            return None
+    
     def log_action(
         self,
         user_id: Optional[int],
@@ -396,21 +433,50 @@ class AuditLogManager:
     ):
         with self._lock:
             try:
-                if self._db_session is not None:
-                    import models
-                    audit_log = models.AuditLog(
-                        user_id=user_id,
-                        module=module,
-                        action=action,
-                        target_id=target_id,
-                        target_type=target_type,
-                        details=details,
-                        ip_address=ip_address,
-                        timestamp=datetime.utcnow()
-                    )
-                    self._db_session.add(audit_log)
-                    self._db_session.commit()
-            except Exception:
+                import models
+                
+                db = self._get_new_session()
+                if db is None:
+                    db = self._db_session
+                
+                if db is not None:
+                    try:
+                        module_enum = module
+                        if isinstance(module, str):
+                            try:
+                                module_enum = models.AuditLogModule(module)
+                            except ValueError:
+                                module_enum = models.AuditLogModule.SYSTEM
+                        
+                        action_enum = action
+                        if isinstance(action, str):
+                            try:
+                                action_enum = models.AuditLogAction(action)
+                            except ValueError:
+                                action_enum = models.AuditLogAction.OTHER
+                        
+                        audit_log = models.AuditLog(
+                            user_id=user_id,
+                            module=module_enum,
+                            action=action_enum,
+                            target_id=target_id,
+                            target_type=target_type,
+                            details=details,
+                            ip_address=ip_address,
+                            timestamp=datetime.utcnow()
+                        )
+                        db.add(audit_log)
+                        db.commit()
+                        db.refresh(audit_log)
+                    except Exception as e:
+                        if db is not None and db != self._db_session:
+                            db.rollback()
+                        raise
+                    finally:
+                        if db is not None and db != self._db_session:
+                            db.close()
+            except Exception as e:
+                print(f"[审计日志警告] 记录日志失败: {e}")
                 pass
     
     def get_audit_logs(

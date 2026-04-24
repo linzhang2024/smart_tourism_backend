@@ -483,6 +483,60 @@ def migrate_database():
 migrate_database()
 models.Base.metadata.create_all(bind=engine)
 
+
+def init_default_admin():
+    from database import SessionLocal
+    from auth import get_password_hash
+    
+    db = SessionLocal()
+    try:
+        existing_admin = db.query(models.User).filter(
+            models.User.username == "admin"
+        ).first()
+        
+        if existing_admin is None:
+            admin_user = models.User(
+                username="admin",
+                hashed_password=get_password_hash("admin123"),
+                role=models.UserRole.ADMIN,
+                phone="13800138000",
+                is_active=True
+            )
+            db.add(admin_user)
+            db.commit()
+            db.refresh(admin_user)
+            print(f"[初始化] 创建默认管理员用户: admin (密码: admin123, 电话: 13800138000)")
+        else:
+            print(f"[初始化] 默认管理员用户已存在: admin")
+        
+        existing_test_user = db.query(models.User).filter(
+            models.User.username == "test_user"
+        ).first()
+        
+        if existing_test_user is None:
+            test_user = models.User(
+                username="test_user",
+                hashed_password=get_password_hash("test123"),
+                role=models.UserRole.TOURIST,
+                phone="13912345678",
+                is_active=True
+            )
+            db.add(test_user)
+            db.commit()
+            db.refresh(test_user)
+            print(f"[初始化] 创建测试用户: test_user (密码: test123, 电话: 13912345678)")
+        else:
+            print(f"[初始化] 测试用户已存在: test_user")
+            
+    except Exception as e:
+        print(f"[初始化警告] 初始化用户时出错: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+init_default_admin()
+
 app = FastAPI(
     title="智慧旅游后端API",
     description="智慧旅游系统后端服务，包含景点、门票、游客管理功能",
@@ -4495,6 +4549,29 @@ async def get_system_doctor_page(
 
 
 app.include_router(system_dashboard_router)
+
+
+@app.middleware("http")
+async def mask_sensitive_response(request: Request, call_next):
+    response = await call_next(request)
+    
+    try:
+        if hasattr(response, 'body') and response.body:
+            import json
+            try:
+                body_str = response.body.decode('utf-8')
+                data = json.loads(body_str)
+                masked_data = security.mask_response_content(data)
+                if masked_data != data:
+                    new_body = json.dumps(masked_data, ensure_ascii=False, default=str).encode('utf-8')
+                    response.body = new_body
+                    response.headers['content-length'] = str(len(new_body))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass
+    except Exception:
+        pass
+    
+    return response
 
 
 @app.middleware("http")
