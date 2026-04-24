@@ -717,3 +717,35 @@ class ReconciliationResult(BaseModel):
     difference: float
     message: str
     details: Optional[Dict[str, Any]] = None
+
+
+class AnalyticsOverview(BaseModel):
+    today_sales_total: float
+    today_visitor_count: int
+    current_in_scenic_count: int
+    month_total_profit: float
+    member_conversion_rate: float
+    updated_at: datetime
+
+
+class DailySalesData(BaseModel):
+    date: str
+    order_count: int
+    income: float
+
+
+class SalesTrendResponse(BaseModel):
+    data: List[DailySalesData]
+    period_start: str
+    period_end: str
+
+
+class TouristSourceData(BaseModel):
+    source: str
+    count: int
+    percentage: float
+
+
+class TouristSourceResponse(BaseModel):
+    data: List[TouristSourceData]
+    total_count: int
