@@ -2908,6 +2908,80 @@ def delete_time_limited_commission(
     )
 
 
+@marketing_router.get("/dashboard/stats", response_model=dict)
+def get_marketing_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.get_current_active_user)
+):
+    from sqlalchemy import func, and_
+    from datetime import datetime, date
+    
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    
+    today_coupon_used_count = db.query(
+        func.count(models.UserCoupon.id)
+    ).filter(
+        models.UserCoupon.is_used == True,
+        models.UserCoupon.used_at >= today_start
+    ).scalar() or 0
+    
+    today_coupon_orders = db.query(
+        func.count(models.TicketOrder.id).label('order_count'),
+        func.sum(models.TicketOrder.total_price).label('total_revenue')
+    ).filter(
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.created_at >= today_start
+    ).join(
+        models.UserCoupon,
+        models.UserCoupon.used_order_id == models.TicketOrder.id
+    ).first()
+    
+    today_coupon_orders_count = today_coupon_orders.order_count or 0
+    today_coupon_revenue = today_coupon_orders.total_revenue or 0.0
+    
+    active_coupons = db.query(
+        func.count(models.Coupon.id)
+    ).filter(
+        models.Coupon.is_active == True,
+        models.Coupon.valid_from <= datetime.utcnow(),
+        models.Coupon.valid_to >= datetime.utcnow(),
+        models.Coupon.remained_stock > 0
+    ).scalar() or 0
+    
+    active_time_limited = db.query(
+        func.count(models.TimeLimitedCommission.id)
+    ).filter(
+        models.TimeLimitedCommission.is_active == True,
+        models.TimeLimitedCommission.valid_from <= datetime.utcnow(),
+        models.TimeLimitedCommission.valid_to >= datetime.utcnow()
+    ).scalar() or 0
+    
+    total_coupons_issued = db.query(
+        func.count(models.UserCoupon.id)
+    ).scalar() or 0
+    
+    total_coupons_used = db.query(
+        func.count(models.UserCoupon.id)
+    ).filter(
+        models.UserCoupon.is_used == True
+    ).scalar() or 0
+    
+    coupon_utilization_rate = 0.0
+    if total_coupons_issued > 0:
+        coupon_utilization_rate = round(total_coupons_used / total_coupons_issued * 100, 1)
+    
+    return {
+        "today_coupon_used_count": today_coupon_used_count,
+        "today_coupon_orders_count": today_coupon_orders_count,
+        "today_coupon_revenue": today_coupon_revenue,
+        "active_coupons": active_coupons,
+        "active_time_limited": active_time_limited,
+        "total_coupons_issued": total_coupons_issued,
+        "total_coupons_used": total_coupons_used,
+        "coupon_utilization_rate": coupon_utilization_rate
+    }
+
+
 app.include_router(marketing_router)
 
 
