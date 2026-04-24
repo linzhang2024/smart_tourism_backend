@@ -77,15 +77,20 @@ class SecurityTester:
         self.auth_token: str = ""
         self.admin_username = "admin"
         self.admin_password = "admin123"
+        self.fallback_admin_token = ""
         self.client = httpx.AsyncClient(timeout=60.0)
         
     async def close(self):
         await self.client.aclose()
         
     def get_headers(self) -> Dict[str, str]:
-        if self.auth_token:
-            return {"Authorization": f"Bearer {self.auth_token}"}
+        token = self.auth_token or self.fallback_admin_token
+        if token:
+            return {"Authorization": f"Bearer {token}"}
         return {}
+    
+    def has_valid_token(self) -> bool:
+        return bool(self.auth_token or self.fallback_admin_token)
     
     async def setup(self):
         print("=" * 60)
@@ -130,10 +135,14 @@ class SecurityTester:
                     
                     self.results.add_pass("管理员登录认证", "成功获取访问令牌")
                     
-                    if user.get('phone') and '*' in user.get('phone', ''):
-                        self.results.add_pass("登录响应数据脱敏", f"手机号已脱敏: {user.get('phone')}")
-                    else:
-                        print(f"  [提示] 登录响应中的手机号未脱敏或无手机号")
+                    phone = user.get('phone', '')
+                    if phone:
+                        if re.match(r'^\d{3}\*\*\*\*\d{4}$', phone):
+                            self.results.add_pass("登录响应数据脱敏", f"手机号已正确脱敏: {phone}")
+                        elif '*' in phone:
+                            self.results.add_pass("登录响应数据脱敏", f"手机号已脱敏: {phone}")
+                        else:
+                            self.results.add_fail("登录响应数据脱敏", f"手机号未脱敏: {phone}")
                 else:
                     self.results.add_fail("管理员登录认证", "响应中未包含 access_token")
                     print(f"  响应内容: {data}")
@@ -148,6 +157,7 @@ class SecurityTester:
                     f"登录失败，状态码: {response.status_code}, 详情: {error_detail}"
                 )
                 print(f"  请确保数据库中存在 admin 用户，密码为 admin123")
+                print(f"  [提示] 尝试使用备用令牌进行后续测试...")
         except Exception as e:
             self.results.add_error("管理员登录认证", e)
             
@@ -238,11 +248,11 @@ class SecurityTester:
         print("预期格式: 138****5678 (保留前3位和后4位，中间用*号替换)")
         print()
         
-        if not self.auth_token:
+        if not self.has_valid_token():
             self.results.add_fail("数据脱敏测试", "需要有效的认证令牌")
             return
             
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = self.get_headers()
         
         print("步骤 1: 检查当前用户信息接口 (/auth/me)")
         try:
@@ -258,12 +268,18 @@ class SecurityTester:
                 print(f"  返回的手机号: {phone}")
                 
                 if phone:
-                    if "*" in phone:
+                    if re.match(r'^\d{3}\*\*\*\*\d{4}$', phone):
+                        self.results.add_pass(
+                            "当前用户信息脱敏",
+                            f"手机号已正确脱敏: {phone} (格式: 138****5678)"
+                        )
+                        print("[PASS] 手机号已正确脱敏 (格式: 138****5678)")
+                    elif '*' in phone and len(phone) == 11:
                         self.results.add_pass(
                             "当前用户信息脱敏",
                             f"手机号已脱敏: {phone}"
                         )
-                        print("[PASS] 手机号已正确脱敏")
+                        print("[PASS] 手机号已脱敏")
                     else:
                         if re.match(r'^\d{11}$', phone):
                             self.results.add_fail(
@@ -313,7 +329,10 @@ class SecurityTester:
                         username = user.get("username")
                         
                         if phone:
-                            if "*" in phone:
+                            if re.match(r'^\d{3}\*\*\*\*\d{4}$', phone):
+                                masked_count += 1
+                                print(f"    用户 {username}: 已正确脱敏 ({phone})")
+                            elif '*' in phone:
                                 masked_count += 1
                                 print(f"    用户 {username}: 已脱敏 ({phone})")
                             elif re.match(r'^\d{11}$', phone):
@@ -372,11 +391,11 @@ class SecurityTester:
         print("操作: 修改用户状态，然后检查审计日志是否记录")
         print()
         
-        if not self.auth_token:
+        if not self.has_valid_token():
             self.results.add_fail("审计日志测试", "需要有效的认证令牌")
             return
             
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = self.get_headers()
         
         test_user_id = None
         test_user_name = None
@@ -526,11 +545,11 @@ class SecurityTester:
         print("目标: 验证系统医生 API 是否正常工作")
         print()
         
-        if not self.auth_token:
+        if not self.has_valid_token():
             self.results.add_fail("性能监控测试", "需要有效的认证令牌")
             return
             
-        headers = {"Authorization": f"Bearer {self.auth_token}"}
+        headers = self.get_headers()
         
         print("步骤 1: 测试 /system/health 接口")
         try:
