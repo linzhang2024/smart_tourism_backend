@@ -3401,6 +3401,39 @@
                     </tbody>
                 </table>
             </div>
+
+            <div class="chart-section" id="marketingStatsSection" style="display: none;">
+                <h3 class="section-title">
+                    <span class="icon">📊</span>
+                    今日营销活动表现
+                </h3>
+                <div class="cards-grid">
+                    <div class="card" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.05)); border-left: 4px solid #8b5cf6;">
+                        <div class="card-icon">🎫</div>
+                        <div class="card-title">今日优惠券核销</div>
+                        <div class="card-value" id="marketingCouponUsedCount" style="color: #8b5cf6;">0</div>
+                        <div class="trend-label" style="color: rgba(255, 255, 255, 0.5);">张</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 255, 136, 0.05)); border-left: 4px solid #00ff88;">
+                        <div class="card-icon">💰</div>
+                        <div class="card-title">优惠券带来订单额</div>
+                        <div class="card-value" id="marketingCouponRevenue" style="color: #00ff88;">¥0.00</div>
+                        <div class="trend-label" style="color: rgba(255, 255, 255, 0.5);">今日新增</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 215, 0, 0.05)); border-left: 4px solid #ffd700;">
+                        <div class="card-icon">📈</div>
+                        <div class="card-title">优惠券使用率</div>
+                        <div class="card-value" id="marketingUtilizationRate" style="color: #ffd700;">0%</div>
+                        <div class="trend-label" style="color: rgba(255, 255, 255, 0.5);">已使用/已发放</div>
+                    </div>
+                    <div class="card" style="background: linear-gradient(135deg, rgba(0, 210, 255, 0.15), rgba(0, 210, 255, 0.05)); border-left: 4px solid #00d2ff;">
+                        <div class="card-icon">🔥</div>
+                        <div class="card-title">进行中活动</div>
+                        <div class="card-value" id="marketingActiveCount" style="color: #00d2ff;">0</div>
+                        <div class="trend-label" style="color: rgba(255, 255, 255, 0.5);">优惠券 + 限时高佣</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="distributor-section" id="distributorSection">
@@ -7349,6 +7382,70 @@
                 exportFinanceBtn.addEventListener('click', exportFinancialLogs);
             }
         });
+
+        async function fetchMarketingStats() {
+            const token = getAuthToken();
+            if (!token) return null;
+            
+            try {
+                const response = await fetch('/marketing/dashboard/stats', {
+                    headers: getAuthHeaders()
+                });
+                
+                if (!response.ok) {
+                    console.warn('获取营销数据失败:', response.status);
+                    return null;
+                }
+                
+                return await response.json();
+            } catch (e) {
+                console.error('获取营销数据失败:', e);
+                return null;
+            }
+        }
+
+        function updateMarketingStats(stats) {
+            const marketingSection = document.getElementById('marketingStatsSection');
+            if (!marketingSection) return;
+            
+            if (!stats) {
+                marketingSection.style.display = 'none';
+                return;
+            }
+            
+            marketingSection.style.display = 'block';
+            
+            const couponUsedCountEl = document.getElementById('marketingCouponUsedCount');
+            const couponRevenueEl = document.getElementById('marketingCouponRevenue');
+            const utilizationRateEl = document.getElementById('marketingUtilizationRate');
+            const activeCountEl = document.getElementById('marketingActiveCount');
+            
+            if (couponUsedCountEl) {
+                couponUsedCountEl.textContent = stats.today_coupon_used_count || 0;
+            }
+            
+            if (couponRevenueEl) {
+                couponRevenueEl.textContent = `¥${(stats.today_coupon_revenue || 0).toFixed(2)}`;
+            }
+            
+            if (utilizationRateEl) {
+                utilizationRateEl.textContent = `${stats.coupon_utilization_rate || 0}%`;
+            }
+            
+            if (activeCountEl) {
+                const totalActive = (stats.active_coupons || 0) + (stats.active_time_limited || 0);
+                activeCountEl.textContent = totalActive;
+            }
+        }
+
+        async function loadAndDisplayMarketingStats() {
+            try {
+                const stats = await fetchMarketingStats();
+                updateMarketingStats(stats);
+            } catch (e) {
+                console.error('加载营销数据失败:', e);
+            }
+        }
     </script>
 </body>
 </html>

@@ -468,7 +468,31 @@ def test_20_yuan_coupon_100_yuan_ticket(db, test_data):
     db.add(order)
     db.flush()
     
-    print(f"\n  [步骤 8] 标记优惠券已使用...")
+    print(f"\n  [步骤 8] 创建财务流水记录...")
+    
+    income_log = models.FinancialLog(
+        transaction_type=models.TransactionType.INCOME,
+        order_no=order.order_no,
+        amount=total_price,
+        summary=f"门票订单收入 - 景点ID={scenic_spot.id}",
+        transaction_time=datetime.utcnow()
+    )
+    db.add(income_log)
+    
+    if commission_amount > 0:
+        expense_log = models.FinancialLog(
+            transaction_type=models.TransactionType.DISTRIBUTION_EXPENSE,
+            order_no=order.order_no,
+            amount=commission_amount,
+            summary=f"分销支出 - 分销商ID={distributor.id}",
+            related_distributor_id=distributor.id,
+            transaction_time=datetime.utcnow()
+        )
+        db.add(expense_log)
+    
+    db.flush()
+    
+    print(f"\n  [步骤 9] 标记优惠券已使用...")
     user_coupon.is_used = True
     user_coupon.used_at = datetime.utcnow()
     user_coupon.used_order_id = order.id
