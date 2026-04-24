@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统医生 - 智慧旅游系统监控</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-blue: #00d2ff;
+            --secondary-blue: #3a7bd5;
+            --dark-bg: #050510;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(0, 210, 255, 0.2);
+            --success-color: #00ff88;
+            --warning-color: #ffaa00;
+            --danger-color: #ff4444;
+            --purple-glow: #8b5cf6;
+            --gold-glow: #ffd700;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #050510 0%, #0a0a2e 50%, #051020 100%);
+            min-height: 100vh;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+
+        .dashboard-container {
+            max-width: 1920px;
+            margin: 0 auto;
+            padding: 10px 15px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 15px 0;
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .header::before,
+        .header::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 25%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary-blue), transparent);
+        }
+
+        .header::before { left: 0; }
+        .header::after { right: 0; }
+
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #00d2ff, #8b5cf6, #ff006e, #00d2ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientFlow 4s ease infinite;
+            letter-spacing: 4px;
+        }
+
+        @keyframes gradientFlow {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .header .subtitle {
+            margin-top: 5px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+        }
+
+        .header .update-time {
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--primary-blue);
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, rgba(0, 210, 255, 0.05), rgba(139, 92, 246, 0.03));
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-blue), var(--purple-glow));
+        }
+
+        .metric-card.health { --card-color: var(--success-color); }
+        .metric-card.health::before { background: linear-gradient(90deg, var(--success-color), #00cc6a); }
+
+        .metric-card.response { --card-color: var(--primary-blue); }
+        .metric-card.response::before { background: linear-gradient(90deg, #00d2ff, #3a7bd5); }
+
+        .metric-card.requests { --card-color: var(--gold-glow); }
+        .metric-card.requests::before { background: linear-gradient(90deg, #ffd700, #ffaa00); }
+
+        .metric-card.uptime { --card-color: var(--purple-glow); }
+        .metric-card.uptime::before { background: linear-gradient(90deg, #8b5cf6, #6366f1); }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 210, 255, 0.2);
+        }
+
+        .metric-icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+
+        .metric-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--card-color);
+            text-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .metric-sub {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 3px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .charts-grid.triple {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .chart-card {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(0, 210, 255, 0.02));
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chart-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--purple-glow), var(--primary-blue), var(--purple-glow));
+        }
+
+        .chart-card.full-width { grid-column: 1 / -1; }
+        .chart-card.performance { border-color: rgba(0, 255, 136, 0.3); }
+        .chart-card.performance::before { background: linear-gradient(90deg, #00ff88, #00cc6a, #00ff88); }
+        .chart-card.errors { border-color: rgba(255, 68, 68, 0.3); }
+        .chart-card.errors::before { background: linear-gradient(90deg, #ff4444, #ffaa00, #ff4444); }
+        .chart-card.audit { border-color: rgba(139, 92, 246, 0.3); }
+        .chart-card.audit::before { background: linear-gradient(90deg, #8b5cf6, #6366f1, #8b5cf6); }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .chart-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chart-title::before {
+            content: '';
+            width: 3px;
+            height: 16px;
+            background: linear-gradient(180deg, var(--primary-blue), var(--purple-glow));
+            border-radius: 2px;
+        }
+
+        .chart-badge {
+            padding: 3px 10px;
+            background: rgba(0, 210, 255, 0.1);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            border-radius: 15px;
+            font-size: 0.7rem;
+            color: var(--primary-blue);
+        }
+
+        .chart-badge.success {
+            background: rgba(0, 255, 136, 0.1);
+            border-color: rgba(0, 255, 136, 0.3);
+            color: var(--success-color);
+        }
+
+        .chart-badge.danger {
+            background: rgba(255, 68, 68, 0.1);
+            border-color: rgba(255, 68, 68, 0.3);
+            color: var(--danger-color);
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 280px;
+        }
+
+        .chart-container.small {
+            height: 200px;
+        }
+
+        .log-list {
+            max-height: 350px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .log-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .log-list::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 2px;
+        }
+
+        .log-list::-webkit-scrollbar-thumb {
+            background: rgba(0, 210, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        .log-item {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--primary-blue);
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .log-item:hover {
+            background: rgba(0, 210, 255, 0.05);
+            transform: translateX(2px);
+        }
+
+        .log-item.error {
+            border-left-color: var(--danger-color);
+            background: rgba(255, 68, 68, 0.05);
+        }
+
+        .log-item.warning {
+            border-left-color: var(--warning-color);
+            background: rgba(255, 170, 0, 0.05);
+        }
+
+        .log-item.success {
+            border-left-color: var(--success-color);
+            background: rgba(0, 255, 136, 0.05);
+        }
+
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .log-endpoint {
+            font-weight: 600;
+            font-size: 0.85rem;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .log-time {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .log-message {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            margin-bottom: 3px;
+            word-break: break-all;
+        }
+
+        .log-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        .log-status.error {
+            background: rgba(255, 68, 68, 0.2);
+            color: var(--danger-color);
+        }
+
+        .log-status.success {
+            background: rgba(0, 255, 136, 0.2);
+            color: var(--success-color);
+        }
+
+        .log-status.warning {
+            background: rgba(255, 170, 0, 0.2);
+            color: var(--warning-color);
+        }
+
+        .log-user {
+            font-size: 0.7rem;
+            color: var(--primary-blue);
+            margin-left: 8px;
+        }
+
+        .log-module {
+            font-size: 0.65rem;
+            color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1px 6px;
+            border-radius: 3px;
+        }
+
+        .no-logs {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .no-logs .icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+
+        .no-logs .text {
+            font-size: 0.85rem;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(5, 5, 16, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            border-radius: 12px;
+        }
+
+        .loading-overlay.hidden { display: none; }
+
+        .spinner {
+            width: 35px;
+            height: 35px;
+            border: 3px solid rgba(0, 210, 255, 0.1);
+            border-top-color: var(--primary-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.75rem;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 12px;
+            color: rgba(255, 255, 255, 0.3);
+            font-size: 0.7rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .footer .auto-refresh {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            background: rgba(0, 255, 136, 0.05);
+            border-radius: 15px;
+            color: var(--success-color);
+        }
+
+        .footer .dot {
+            width: 5px;
+            height: 5px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .error-message {
+            position: fixed;
+            top: 20px; right: 20px;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, rgba(255, 68, 68, 0.9), rgba(255, 68, 68, 0.8));
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 6px 25px rgba(255, 68, 68, 0.4);
+            z-index: 1000;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+        }
+
+        .error-message.show { transform: translateX(0); }
+        .error-message .error-title { font-weight: 600; margin-bottom: 2px; }
+        .error-message .error-desc { font-size: 0.8rem; opacity: 0.9; }
+
+        @media (max-width: 1600px) {
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .charts-grid.triple { grid-template-columns: repeat(2, 1fr); }
+        }
+
+        @media (max-width: 1200px) {
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .charts-grid { grid-template-columns: 1fr; }
+            .charts-grid.triple { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1>系统医生 - 实时监控</h1>
+            <p class="subtitle">SYSTEM DOCTOR - REAL-TIME MONITORING</p>
+            <p class="update-time" id="updateTime">数据更新中...</p>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card health">
+                <div class="metric-icon">🩺</div>
+                <div class="metric-label">系统健康状态</div>
+                <div class="metric-value" id="healthStatus">检测中</div>
+                <div class="metric-sub" id="databaseStatus">数据库状态: --</div>
+            </div>
+            <div class="metric-card response">
+                <div class="metric-icon">⏱️</div>
+                <div class="metric-label">API 平均响应时间</div>
+                <div class="metric-value" id="avgResponseTime">0</div>
+                <div class="metric-sub">毫秒 (ms)</div>
+            </div>
+            <div class="metric-card requests">
+                <div class="metric-icon">📊</div>
+                <div class="metric-label">近期请求总数</div>
+                <div class="metric-value" id="totalRequests">0</div>
+                <div class="metric-sub">过去 5 分钟</div>
+            </div>
+            <div class="metric-card uptime">
+                <div class="metric-icon">⏰</div>
+                <div class="metric-label">系统运行时间</div>
+                <div class="metric-value" id="uptime">0</div>
+                <div class="metric-sub" id="uptimeUnit">秒</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-card performance">
+                <div class="chart-header">
+                    <h3 class="chart-title">API 性能监控</h3>
+                    <span class="chart-badge success" id="performanceBadge">正常</span>
+                </div>
+                <div class="chart-container" id="performanceChart">
+                    <div class="loading-overlay" id="performanceLoading">
+                        <div class="spinner"></div>
+                        <p class="loading-text">加载性能数据中...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">系统资源使用</h3>
+                    <span class="chart-badge" id="resourceBadge">实时状态</span>
+                </div>
+                <div class="chart-container" id="resourceChart">
+                    <div class="loading-overlay" id="resourceLoading">
+                        <div class="spinner"></div>
+                        <p class="loading-text">加载资源数据中...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="charts-grid triple">
+            <div class="chart-card errors">
+                <div class="chart-header">
+                    <h3 class="chart-title">错误日志</h3>
+                    <span class="chart-badge danger" id="errorCountBadge" style="display: none;">0 条错误</span>
+                    <span class="chart-badge success" id="noErrorBadge">无错误</span>
+                </div>
+                <div class="log-list" id="errorLogList">
+                    <div class="no-logs">
+                        <div class="icon">✅</div>
+                        <div class="text">系统运行正常，无错误日志</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card audit">
+                <div class="chart-header">
+                    <h3 class="chart-title">操作审计日志</h3>
+                    <span class="chart-badge" id="auditBadge">最近 10 条</span>
+                </div>
+                <div class="log-list" id="auditLogList">
+                    <div class="no-logs">
+                        <div class="icon">📋</div>
+                        <div class="text">暂无审计日志</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">端点性能排行</h3>
+                    <span class="chart-badge">按平均耗时排序</span>
+                </div>
+                <div class="log-list" id="endpointRankingList">
+                    <div class="no-logs">
+                        <div class="icon">📊</div>
+                        <div class="text">暂无性能数据</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="auto-refresh">
+                <span class="dot"></span>
+                <span>自动刷新: 每30秒</span>
+                <span id="countdown">下次刷新: 30秒</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="error-message" id="errorMessage">
+        <div class="error-title">数据获取失败</div>
+        <div class="error-desc" id="errorDesc">请检查网络连接</div>
+    </div>
+
+    <script>
+        const API_BASE_URL = '';
+        let authToken = localStorage.getItem('authToken') || '';
+        let performanceChart = null;
+        let resourceChart = null;
+        let countdownInterval = null;
+        let countdownSeconds = 30;
+
+        function formatUptime(seconds) {
+            if (seconds < 60) {
+                return { value: seconds, unit: '秒' };
+            } else if (seconds < 3600) {
+                return { value: Math.floor(seconds / 60), unit: '分钟' };
+            } else if (seconds < 86400) {
+                return { value: Math.floor(seconds / 3600), unit: '小时' };
+            } else {
+                return { value: Math.floor(seconds / 86400), unit: '天' };
+            }
+        }
+
+        function formatDateTime(dt) {
+            if (!dt) return '--';
+            const date = new Date(dt);
+            return date.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            document.getElementById('errorDesc').textContent = message;
+            errorEl.classList.add('show');
+            setTimeout(() => {
+                errorEl.classList.remove('show');
+            }, 5000);
+        }
+
+        async function apiRequest(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('authToken');
+                    authToken = '';
+                    const token = await getAuthToken();
+                    if (token) {
+                        return apiRequest(url, options);
+                    }
+                    throw new Error('认证失败，请重新登录');
+                }
+
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.detail || `HTTP ${response.status}`);
+                }
+
+                return response.json();
+            } catch (error) {
+                console.error('API请求错误:', error);
+                throw error;
+            }
+        }
+
+        async function getAuthToken() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: 'admin',
+                        password: 'admin123'
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    localStorage.setItem('authToken', authToken);
+                    return authToken;
+                }
+            } catch (error) {
+                console.error('自动登录失败:', error);
+            }
+            return null;
+        }
+
+        async function loadHealthData() {
+            try {
+                const data = await apiRequest(`${API_BASE_URL}/system/health`);
+                
+                const healthStatusEl = document.getElementById('healthStatus');
+                const databaseStatusEl = document.getElementById('databaseStatus');
+                const uptimeEl = document.getElementById('uptime');
+                const uptimeUnitEl = document.getElementById('uptimeUnit');
+                
+                if (data.database_status === '健康' && data.api_status === '运行中') {
+                    healthStatusEl.textContent = '健康';
+                    healthStatusEl.style.color = 'var(--success-color)';
+                } else {
+                    healthStatusEl.textContent = '异常';
+                    healthStatusEl.style.color = 'var(--danger-color)';
+                }
+                
+                databaseStatusEl.textContent = `数据库: ${data.database_status} | API: ${data.api_status}`;
+                
+                const uptime = formatUptime(data.uptime_seconds);
+                uptimeEl.textContent = uptime.value;
+                uptimeUnitEl.textContent = uptime.unit;
+                
+                const updateTime = new Date(data.updated_at);
+                document.getElementById('updateTime').textContent = 
+                    `数据更新时间: ${updateTime.toLocaleString('zh-CN')}`;
+                
+                updateResourceChart(data);
+                
+            } catch (error) {
+                console.error('加载健康数据失败:', error);
+                showError('健康数据加载失败: ' + error.message);
+            }
+        }
+
+        async function loadPerformanceData() {
+            const loadingEl = document.getElementById('performanceLoading');
+            
+            try {
+                loadingEl.classList.remove('hidden');
+                
+                const data = await apiRequest(`${API_BASE_URL}/system/performance`);
+                
+                document.getElementById('avgResponseTime').textContent = data.average_response_time_ms.toFixed(2);
+                document.getElementById('totalRequests').textContent = data.total_requests.toLocaleString();
+                
+                const performanceBadge = document.getElementById('performanceBadge');
+                if (data.average_response_time_ms < 100) {
+                    performanceBadge.textContent = '优秀';
+                    performanceBadge.className = 'chart-badge success';
+                } else if (data.average_response_time_ms < 500) {
+                    performanceBadge.textContent = '良好';
+                    performanceBadge.className = 'chart-badge';
+                } else {
+                    performanceBadge.textContent = '较慢';
+                    performanceBadge.className = 'chart-badge danger';
+                }
+                
+                updateEndpointRanking(data.endpoint_stats);
+                updatePerformanceChart(data);
+                
+                updateErrorLogs(data.recent_errors);
+                
+                loadingEl.classList.add('hidden');
+                
+            } catch (error) {
+                console.error('加载性能数据失败:', error);
+                loadingEl.classList.add('hidden');
+                showError('性能数据加载失败: ' + error.message);
+            }
+        }
+
+        async function loadAuditLogs() {
+            try {
+                const data = await apiRequest(`${API_BASE_URL}/system/audit-logs?limit=10`);
+                updateAuditLogs(data.items);
+            } catch (error) {
+                console.error('加载审计日志失败:', error);
+            }
+        }
+
+        function updateResourceChart(data) {
+            const loadingEl = document.getElementById('resourceLoading');
+            loadingEl.classList.add('hidden');
+            
+            if (!resourceChart) {
+                resourceChart = echarts.init(document.getElementById('resourceChart'));
+            }
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(10, 10, 30, 0.95)',
+                    borderColor: 'rgba(0, 210, 255, 0.3)',
+                    borderWidth: 1,
+                    textStyle: { color: '#fff' }
+                },
+                legend: {
+                    data: ['CPU使用率', '内存使用'],
+                    textStyle: { color: 'rgba(255, 255, 255, 0.7)' },
+                    top: 0
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: ['当前'],
+                    axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
+                    axisLabel: { color: 'rgba(255, 255, 255, 0.6)' }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '百分比(%)',
+                        max: 100,
+                        axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
+                        axisLabel: { color: 'rgba(255, 255, 255, 0.6)' },
+                        splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } }
+                    },
+                    {
+                        type: 'value',
+                        name: '内存(MB)',
+                        axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
+                        axisLabel: { color: 'rgba(255, 255, 255, 0.6)' },
+                        splitLine: { show: false }
+                    }
+                ],
+                series: [
+                    {
+                        name: 'CPU使用率',
+                        type: 'bar',
+                        data: [data.cpu_usage_percent || 0],
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#ff4444' },
+                                { offset: 1, color: '#ff7777' }
+                            ])
+                        },
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 15,
+                                shadowColor: 'rgba(255, 68, 68, 0.5)'
+                            }
+                        }
+                    },
+                    {
+                        name: '内存使用',
+                        type: 'bar',
+                        yAxisIndex: 1,
+                        data: [data.memory_usage_mb || 0],
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#8b5cf6' },
+                                { offset: 1, color: '#a78bfa' }
+                            ])
+                        },
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 15,
+                                shadowColor: 'rgba(139, 92, 246, 0.5)'
+                            }
+                        }
+                    }
+                ]
+            };
+
+            resourceChart.setOption(option, true);
+        }
+
+        function updatePerformanceChart(data) {
+            const loadingEl = document.getElementById('performanceLoading');
+            
+            if (!performanceChart) {
+                performanceChart = echarts.init(document.getElementById('performanceChart'));
+            }
+
+            const endpoints = data.endpoint_stats.map(s => s.endpoint.split('/').slice(-2).join('/') || s.endpoint);
+            const avgTimes = data.endpoint_stats.map(s => s.avg_duration_ms);
+            const requestCounts = data.endpoint_stats.map(s => s.requests);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(10, 10, 30, 0.95)',
+                    borderColor: 'rgba(0, 210, 255, 0.3)',
+                    borderWidth: 1,
+                    textStyle: { color: '#fff' },
+                    axisPointer: {
+                        type: 'shadow'
+                    }
+                },
+                legend: {
+                    data: ['平均响应时间(ms)', '请求次数'],
+                    textStyle: { color: 'rgba(255, 255, 255, 0.7)' },
+                    top: 0
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: endpoints.length > 0 ? endpoints : ['暂无数据'],
+                    axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
+                    axisLabel: { 
+                        color: 'rgba(255, 255, 255, 0.6)',
+                        rotate: 30,
+                        fontSize: 10
+                    }
+                },
+                yAxis: [
+                    {
+                        type: 'value',
+                        name: '响应时间(ms)',
+                        axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
+                        axisLabel: { color: 'rgba(255, 255, 255, 0.6)' },
+                        splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.05)' } }
+                    },
+                    {
+                        type: 'value',
+                        name: '请求次数',
+                        axisLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)' } },
+                        axisLabel: { color: 'rgba(255, 255, 255, 0.6)' },
+                        splitLine: { show: false }
+                    }
+                ],
+                series: [
+                    {
+                        name: '平均响应时间(ms)',
+                        type: 'bar',
+                        data: avgTimes.length > 0 ? avgTimes : [0],
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#00d2ff' },
+                                { offset: 1, color: '#3a7bd5' }
+                            ])
+                        },
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 15,
+                                shadowColor: 'rgba(0, 210, 255, 0.5)'
+                            }
+                        }
+                    },
+                    {
+                        name: '请求次数',
+                        type: 'line',
+                        yAxisIndex: 1,
+                        data: requestCounts.length > 0 ? requestCounts : [0],
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 8,
+                        lineStyle: {
+                            width: 3,
+                            color: '#ffd700'
+                        },
+                        itemStyle: {
+                            color: '#ffd700',
+                            borderColor: '#fff',
+                            borderWidth: 2
+                        }
+                    }
+                ]
+            };
+
+            performanceChart.setOption(option, true);
+        }
+
+        function updateEndpointRanking(endpointStats) {
+            const listEl = document.getElementById('endpointRankingList');
+            
+            if (!endpointStats || endpointStats.length === 0) {
+                listEl.innerHTML = `
+                    <div class="no-logs">
+                        <div class="icon">📊</div>
+                        <div class="text">暂无性能数据</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const sorted = [...endpointStats].sort((a, b) => b.avg_duration_ms - a.avg_duration_ms);
+            
+            let html = '';
+            sorted.slice(0, 8).forEach((stat, index) => {
+                const isSlow = stat.avg_duration_ms > 500;
+                const isWarning = stat.avg_duration_ms > 100 && stat.avg_duration_ms <= 500;
+                
+                let statusClass = 'success';
+                if (isSlow) statusClass = 'error';
+                else if (isWarning) statusClass = 'warning';
+
+                html += `
+                    <div class="log-item ${statusClass}">
+                        <div class="log-header">
+                            <span class="log-endpoint">#${index + 1} ${stat.endpoint.split('/').pop() || stat.endpoint}</span>
+                            <span class="log-time">${stat.requests} 次请求</span>
+                        </div>
+                        <div class="log-message">
+                            平均耗时: <strong>${stat.avg_duration_ms.toFixed(2)} ms</strong>
+                            (${stat.min_duration_ms.toFixed(2)} ~ ${stat.max_duration_ms.toFixed(2)} ms)
+                        </div>
+                    </div>
+                `;
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        function updateErrorLogs(errors) {
+            const listEl = document.getElementById('errorLogList');
+            const errorCountBadge = document.getElementById('errorCountBadge');
+            const noErrorBadge = document.getElementById('noErrorBadge');
+
+            if (!errors || errors.length === 0) {
+                errorCountBadge.style.display = 'none';
+                noErrorBadge.style.display = 'inline-block';
+                
+                listEl.innerHTML = `
+                    <div class="no-logs">
+                        <div class="icon">✅</div>
+                        <div class="text">系统运行正常，无错误日志</div>
+                    </div>
+                `;
+                return;
+            }
+
+            errorCountBadge.textContent = `${errors.length} 条错误`;
+            errorCountBadge.style.display = 'inline-block';
+            noErrorBadge.style.display = 'none';
+
+            let html = '';
+            errors.forEach(error => {
+                html += `
+                    <div class="log-item error">
+                        <div class="log-header">
+                            <span class="log-endpoint">${error.endpoint}</span>
+                            <span class="log-time">${formatDateTime(error.timestamp)}</span>
+                        </div>
+                        <div class="log-message">${error.error_message}</div>
+                        <span class="log-status error">状态码: ${error.status_code}</span>
+                    </div>
+                `;
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        function updateAuditLogs(logs) {
+            const listEl = document.getElementById('auditLogList');
+
+            if (!logs || logs.length === 0) {
+                listEl.innerHTML = `
+                    <div class="no-logs">
+                        <div class="icon">📋</div>
+                        <div class="text">暂无审计日志</div>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            logs.forEach(log => {
+                let itemClass = 'success';
+                if (log.action.includes('FAILED') || log.action.includes('ERROR')) {
+                    itemClass = 'error';
+                } else if (log.action === 'UPDATE') {
+                    itemClass = 'warning';
+                }
+
+                html += `
+                    <div class="log-item ${itemClass}">
+                        <div class="log-header">
+                            <span class="log-endpoint">${log.action}</span>
+                            <span class="log-time">${formatDateTime(log.timestamp)}</span>
+                        </div>
+                        <div class="log-message">${log.details || '无详细信息'}</div>
+                        <span class="log-module">${log.module}</span>
+                        ${log.username ? `<span class="log-user">用户: ${log.username}</span>` : ''}
+                    </div>
+                `;
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        async function loadAllData() {
+            await Promise.all([
+                loadHealthData(),
+                loadPerformanceData(),
+                loadAuditLogs()
+            ]);
+        }
+
+        function startCountdown() {
+            countdownSeconds = 30;
+            document.getElementById('countdown').textContent = `下次刷新: ${countdownSeconds}秒`;
+            
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            countdownInterval = setInterval(async () => {
+                countdownSeconds--;
+                document.getElementById('countdown').textContent = `下次刷新: ${countdownSeconds}秒`;
+                
+                if (countdownSeconds <= 0) {
+                    countdownSeconds = 30;
+                    await loadAllData();
+                }
+            }, 1000);
+        }
+
+        window.addEventListener('load', async () => {
+            await getAuthToken();
+            await loadAllData();
+            startCountdown();
+        });
+
+        window.addEventListener('resize', () => {
+            if (performanceChart) performanceChart.resize();
+            if (resourceChart) resourceChart.resize();
+        });
+    </script>
+</body>
+</html>

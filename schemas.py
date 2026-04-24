@@ -812,3 +812,97 @@ class SmartAnalyticsOverview(BaseModel):
     member_analysis: MemberAnalysisResponse
     inventory_alerts: InventoryAlertResponse
     updated_at: datetime
+
+
+class AuditLogAction(str, Enum):
+    CREATE = "CREATE"
+    READ = "READ"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    EXPORT = "EXPORT"
+    IMPORT = "IMPORT"
+    OTHER = "OTHER"
+
+
+class AuditLogModule(str, Enum):
+    AUTH = "认证管理"
+    USER = "用户管理"
+    SCENIC_SPOT = "景点管理"
+    TICKET = "门票管理"
+    ORDER = "订单管理"
+    FINANCE = "财务管理"
+    DISTRIBUTION = "分销管理"
+    ATTENDANCE = "考勤管理"
+    SCHEDULE = "排班管理"
+    INVENTORY = "库存管理"
+    COMPLAINT = "投诉管理"
+    ANALYTICS = "数据分析"
+    SYSTEM = "系统管理"
+
+
+class AuditLog(BaseModel):
+    id: int
+    user_id: Optional[int]
+    username: Optional[str]
+    module: AuditLogModule
+    action: AuditLogAction
+    target_id: Optional[int]
+    target_type: Optional[str]
+    details: Optional[str]
+    ip_address: Optional[str]
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AuditLogListResponse(BaseModel):
+    total: int
+    items: List[AuditLog]
+    module: Optional[str]
+    action: Optional[str]
+    user_id: Optional[int]
+
+
+class EndpointPerformanceStats(BaseModel):
+    endpoint: str
+    requests: int
+    avg_duration_ms: float
+    min_duration_ms: float
+    max_duration_ms: float
+
+
+class ErrorLogEntry(BaseModel):
+    timestamp: datetime
+    endpoint: str
+    error_message: str
+    status_code: int
+
+
+class PerformanceStatsResponse(BaseModel):
+    total_requests: int
+    average_response_time_ms: float
+    endpoint_stats: List[EndpointPerformanceStats]
+    recent_errors: List[ErrorLogEntry]
+    updated_at: datetime
+
+
+class SystemHealthResponse(BaseModel):
+    database_status: str
+    api_status: str
+    active_connections: int
+    uptime_seconds: int
+    memory_usage_mb: float
+    cpu_usage_percent: float
+    updated_at: datetime
+
+
+class SystemDoctorDashboard(BaseModel):
+    performance: PerformanceStatsResponse
+    health: SystemHealthResponse
+    recent_audit_logs: List[AuditLog]
+    updated_at: datetime
