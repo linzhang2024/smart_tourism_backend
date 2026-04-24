@@ -2,72 +2,208 @@ import logging
 import json
 import traceback
 import threading
-from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, Query, Header
+import time
+import sys
+from fastapi import FastAPI, Depends, HTTPException, status, APIRouter, Query, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Optional, Dict, Any
 import os
 from datetime import datetime, timedelta
 from dataclasses import dataclass
+from functools import wraps
 
 import models
 import schemas
 import auth
 from database import engine, get_db
 from analytics_report import get_analytics_report
+import security
 
+APP_START_TIME = datetime.now()
+
+def get_uptime_seconds() -> int:
+    return int((datetime.now() - APP_START_TIME).total_seconds())
+
+def mask_user_response(user: models.User) -> models.User:
+    if user.phone:
+        user.phone = security.mask_phone(user.phone)
+    return user
+
+def mask_user_response_schema(user_response: schemas.UserResponse) -> schemas.UserResponse:
+    if user_response.phone:
+        user_response.phone = security.mask_phone(user_response.phone)
+    return user_response
+
+def performance_monitor_middleware(app: FastAPI):
+    @app.middleware("http")
+    async def add_performance_monitor(request: Request, call_next):
+        start_time = time.time()
+        
+        try:
+            response = await call_next(request)
+            
+            duration_ms = (time.time() - start_time) * 1000
+            endpoint = request.url.path
+            
+            monitor = security.get_performance_monitor()
+            monitor.record_response_time(endpoint, duration_ms)
+            
+            return response
+            
+        except Exception as e:
+            duration_ms = (time.time() - start_time) * 1000
+            endpoint = request.url.path
+            
+            status_code = 500
+            if hasattr(e, 'status_code'):
+                status_code = e.status_code
+            
+            monitor = security.get_performance_monitor()
+            monitor.record_error(endpoint, str(e), status_code)
+            
+            raise
+    
+    return app
+
+def mask_response_decorator(func):
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        result = await func(*args, **kwargs)
+        
+        if isinstance(result, schemas.UserResponse):
+            return mask_user_response_schema(result)
+        elif isinstance(result, list) and len(result) > 0:
+            first_item = result[0]
+            if isinstance(first_item, schemas.UserResponse):
+                return [mask_user_response_schema(item) for item in result]
+            elif isinstance(first_item, models.User):
+                return [mask_user_response(schemas.UserResponse.model_validate(item)) for item in result]
+        elif isinstance(result, models.User):
+            return mask_user_response_schema(schemas.UserResponse.model_validate(result))
+        elif isinstance(result, schemas.Tourist):
+            if result.phone:
+                result.phone = security.mask_phone(result.phone)
+            if result.email:
+                result.email = security.mask_email(result.email)
+            return result
+        elif isinstance(result, list) and len(result) > 0 and isinstance(result[0], schemas.Tourist):
+            for item in result:
+                if item.phone:
+                    item.phone = security.mask_phone(item.phone)
+                if item.email:
+                    item.email = security.mask_email(item.email)
+            return result
+        
+        return result
+    
+    return wrapper
 
 auth_router = APIRouter(prefix="/auth", tags=["认证管理"])
 
 
 @auth_router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
-def register(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
-    return auth.register_user(db, user_data)
+@security.rate_limit("10/minute")
+async def register(request: Request, user_data: schemas.UserCreate, db: Session = Depends(get_db)):
+    result = auth.register_user(db, user_data)
+    
+    audit_manager = security.get_audit_log_manager()
+    audit_manager.log_action(
+        user_id=result.id,
+        module=models.AuditLogModule.AUTH,
+        action=models.AuditLogAction.CREATE,
+        details=f"用户注册: {result.username}",
+        ip_address=request.client.host if request.client else None
+    )
+    
+    return mask_user_response_schema(schemas.UserResponse.model_validate(result))
 
 
 @auth_router.post("/login", response_model=schemas.Token)
-def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
-    return auth.login_user(db, login_data)
+@security.rate_limit("20/minute")
+async def login(request: Request, login_data: schemas.UserLogin, db: Session = Depends(get_db)):
+    result = auth.login_user(db, login_data)
+    
+    result.user = mask_user_response_schema(result.user)
+    
+    audit_manager = security.get_audit_log_manager()
+    audit_manager.log_action(
+        user_id=result.user.id,
+        module=models.AuditLogModule.AUTH,
+        action=models.AuditLogAction.LOGIN,
+        details=f"用户登录: {result.user.username}",
+        ip_address=request.client.host if request.client else None
+    )
+    
+    return result
 
 
 @auth_router.get("/me", response_model=schemas.UserResponse)
-def get_current_user_info(
+async def get_current_user_info(
     current_user: models.User = Depends(auth.get_current_active_user)
 ):
-    return current_user
+    return mask_user_response_schema(schemas.UserResponse.model_validate(current_user))
 
 
 @auth_router.get("/users/list", response_model=List[schemas.UserResponse], tags=["用户管理"])
-def get_users_list(
+async def get_users_list(
     db: Session = Depends(get_db),
     current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
 ):
     users = auth.get_all_users(db)
-    return users
+    return [mask_user_response_schema(schemas.UserResponse.model_validate(u)) for u in users]
 
 
 @auth_router.patch("/users/{user_id}/status", response_model=schemas.UserResponse, tags=["用户管理"])
-def toggle_user_status(
+@security.rate_limit("10/minute")
+async def toggle_user_status(
+    request: Request,
     user_id: int,
     db: Session = Depends(get_db),
     current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
 ):
     user = auth.toggle_user_status(db, user_id, current_admin.id)
-    return user
+    
+    audit_manager = security.get_audit_log_manager()
+    audit_manager.log_action(
+        user_id=current_admin.id,
+        module=models.AuditLogModule.USER,
+        action=models.AuditLogAction.UPDATE,
+        target_id=user_id,
+        target_type="User",
+        details=f"管理员 {current_admin.username} 修改用户状态: {user.username}, 新状态: {'启用' if user.is_active else '禁用'}",
+        ip_address=request.client.host if request.client else None
+    )
+    
+    return mask_user_response_schema(schemas.UserResponse.model_validate(user))
 
 
 @auth_router.patch("/users/{user_id}/role", response_model=schemas.UserResponse, tags=["用户管理"])
-def update_user_role(
+@security.rate_limit("10/minute")
+async def update_user_role(
+    request: Request,
     user_id: int,
     new_role: schemas.UserRole,
     db: Session = Depends(get_db),
     current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
 ):
     user = auth.update_user_role(db, user_id, new_role, current_admin.id)
-    return user
+    
+    audit_manager = security.get_audit_log_manager()
+    audit_manager.log_action(
+        user_id=current_admin.id,
+        module=models.AuditLogModule.USER,
+        action=models.AuditLogAction.UPDATE,
+        target_id=user_id,
+        target_type="User",
+        details=f"管理员 {current_admin.username} 修改用户角色: {user.username}, 新角色: {new_role.value}",
+        ip_address=request.client.host if request.client else None
+    )
+    
+    return mask_user_response_schema(schemas.UserResponse.model_validate(user))
 
 
 CACHE_TTL_SECONDS = 10
@@ -774,7 +910,9 @@ def get_traffic_analytics(spot_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/tickets/purchase", response_model=schemas.TicketOrderWithDistributor, status_code=status.HTTP_201_CREATED, tags=["门票支付"])
-def purchase_ticket(
+@security.rate_limit("30/minute")
+async def purchase_ticket(
+    request: Request,
     order_data: schemas.TicketOrderCreate, 
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.require_role(models.UserRole.TOURIST)),
@@ -1124,6 +1262,17 @@ def purchase_ticket(
             tourist_id=order_data.user_id,
             scenic_spot_id=order_data.scenic_spot_id,
             quantity=order_data.quantity
+        )
+        
+        audit_manager = security.get_audit_log_manager()
+        audit_manager.log_action(
+            user_id=current_user.id,
+            module=models.AuditLogModule.ORDER,
+            action=models.AuditLogAction.CREATE,
+            target_id=order.id,
+            target_type="TicketOrder",
+            details=f"用户 {current_user.username} 购买门票成功: 订单号={order.order_no}, 景点ID={order_data.scenic_spot_id}, 数量={order_data.quantity}, 金额={total_price}元",
+            ip_address=request.client.host if request.client else None
         )
         
         return schemas.TicketOrderWithDistributor(
@@ -3420,7 +3569,9 @@ def export_financial_logs_csv(
 
 
 @app.post("/tickets/orders/{order_id}/refund", response_model=schemas.RefundResponse, tags=["门票支付"])
-def refund_ticket_order(
+@security.rate_limit("10/minute")
+async def refund_ticket_order(
+    request: Request,
     order_id: int,
     refund_data: Optional[schemas.RefundRequest] = None,
     db: Session = Depends(get_db),
@@ -3504,6 +3655,17 @@ def refund_ticket_order(
             order_id=order.order_no,
             tourist_id=current_user.id,
             scenic_spot_id=order.scenic_spot_id
+        )
+        
+        audit_manager = security.get_audit_log_manager()
+        audit_manager.log_action(
+            user_id=current_user.id,
+            module=models.AuditLogModule.FINANCE,
+            action=models.AuditLogAction.UPDATE,
+            target_id=order_id,
+            target_type="TicketOrder",
+            details=f"管理员 {current_user.username} 对订单 {order.order_no} 执行退款操作: 原金额={order.total_price}, 退款金额={refund_amount}, 原因={reason}",
+            ip_address=request.client.host if request.client else None
         )
         
         return schemas.RefundResponse(
@@ -4183,6 +4345,169 @@ def get_smart_overview(
 
 
 app.include_router(analytics_router)
+
+
+system_dashboard_router = APIRouter(prefix="/system", tags=["系统监控"])
+
+
+@system_dashboard_router.get("/health", response_model=schemas.SystemHealthResponse)
+async def get_system_health(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    now = datetime.now()
+    
+    try:
+        db.execute(text("SELECT 1"))
+        database_status = "健康"
+    except Exception:
+        database_status = "异常"
+    
+    try:
+        import psutil
+        process = psutil.Process()
+        memory_info = process.memory_info()
+        memory_usage_mb = memory_info.rss / 1024 / 1024
+        cpu_usage_percent = process.cpu_percent(interval=0.1)
+    except ImportError:
+        memory_usage_mb = 0.0
+        cpu_usage_percent = 0.0
+    
+    return schemas.SystemHealthResponse(
+        database_status=database_status,
+        api_status="运行中",
+        active_connections=0,
+        uptime_seconds=get_uptime_seconds(),
+        memory_usage_mb=round(memory_usage_mb, 2),
+        cpu_usage_percent=round(cpu_usage_percent, 2),
+        updated_at=now
+    )
+
+
+@system_dashboard_router.get("/performance", response_model=schemas.PerformanceStatsResponse)
+async def get_performance_stats(
+    minutes: int = Query(5, ge=1, le=60, description="统计时间范围（分钟）"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    monitor = security.get_performance_monitor()
+    stats = monitor.get_stats(minutes)
+    
+    endpoint_stats_list = []
+    for endpoint, data in stats.get('endpoint_stats', {}).items():
+        endpoint_stats_list.append(schemas.EndpointPerformanceStats(
+            endpoint=endpoint,
+            requests=data.get('requests', 0),
+            avg_duration_ms=data.get('avg_duration_ms', 0.0),
+            min_duration_ms=data.get('min_duration_ms', 0.0),
+            max_duration_ms=data.get('max_duration_ms', 0.0)
+        ))
+    
+    error_logs_list = []
+    for error in stats.get('recent_errors', []):
+        error_logs_list.append(schemas.ErrorLogEntry(
+            timestamp=error.get('timestamp', datetime.now()),
+            endpoint=error.get('endpoint', ''),
+            error_message=error.get('error_message', ''),
+            status_code=error.get('status_code', 500)
+        ))
+    
+    return schemas.PerformanceStatsResponse(
+        total_requests=stats.get('total_requests', 0),
+        average_response_time_ms=stats.get('average_response_time_ms', 0.0),
+        endpoint_stats=endpoint_stats_list,
+        recent_errors=error_logs_list,
+        updated_at=datetime.now()
+    )
+
+
+@system_dashboard_router.get("/audit-logs", response_model=schemas.AuditLogListResponse)
+async def get_audit_logs(
+    module: Optional[str] = Query(None, description="模块名称"),
+    action: Optional[str] = Query(None, description="操作类型"),
+    user_id: Optional[int] = Query(None, description="用户ID"),
+    limit: int = Query(100, ge=1, le=1000, description="返回数量限制"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    query = db.query(models.AuditLog)
+    
+    if module:
+        try:
+            module_enum = models.AuditLogModule(module)
+            query = query.filter(models.AuditLog.module == module_enum)
+        except ValueError:
+            pass
+    
+    if action:
+        try:
+            action_enum = models.AuditLogAction(action)
+            query = query.filter(models.AuditLog.action == action_enum)
+        except ValueError:
+            pass
+    
+    if user_id:
+        query = query.filter(models.AuditLog.user_id == user_id)
+    
+    total = query.count()
+    logs = query.order_by(models.AuditLog.timestamp.desc()).limit(limit).all()
+    
+    return schemas.AuditLogListResponse(
+        total=total,
+        items=logs,
+        module=module,
+        action=action,
+        user_id=user_id
+    )
+
+
+@system_dashboard_router.get("/doctor", response_model=schemas.SystemDoctorDashboard)
+async def get_system_doctor_dashboard(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    health = await get_system_health(db=db, current_user=current_user)
+    performance = await get_performance_stats(minutes=5, db=db, current_user=current_user)
+    
+    recent_logs = db.query(models.AuditLog).order_by(
+        models.AuditLog.timestamp.desc()
+    ).limit(10).all()
+    
+    return schemas.SystemDoctorDashboard(
+        performance=performance,
+        health=health,
+        recent_audit_logs=recent_logs,
+        updated_at=datetime.now()
+    )
+
+
+@system_dashboard_router.get("/doctor-page")
+async def get_system_doctor_page(
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN))
+):
+    doctor_page_path = os.path.join(STATIC_DIR, "system-doctor.html")
+    if os.path.exists(doctor_page_path):
+        return FileResponse(doctor_page_path)
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="系统医生页面不存在"
+    )
+
+
+app.include_router(system_dashboard_router)
+
+
+@app.middleware("http")
+async def setup_audit_db_session(request: Request, call_next):
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        audit_manager = security.get_audit_log_manager()
+        audit_manager.set_db_session(db)
+        response = await call_next(request)
+        return response
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":

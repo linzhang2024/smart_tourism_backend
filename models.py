@@ -233,6 +233,9 @@ class Distributor(Base):
     commission_rate = Column(Float, default=0.05, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    payment_account_encrypted = Column(Text, nullable=True)
+    payment_account_type = Column(String(20), nullable=True)
 
     user = relationship("User")
 
@@ -334,3 +337,54 @@ class FinancialLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     distributor = relationship("Distributor")
+
+
+class AuditLogAction(str, Enum):
+    CREATE = "CREATE"
+    READ = "READ"
+    UPDATE = "UPDATE"
+    DELETE = "DELETE"
+    LOGIN = "LOGIN"
+    LOGOUT = "LOGOUT"
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    EXPORT = "EXPORT"
+    IMPORT = "IMPORT"
+    OTHER = "OTHER"
+
+
+class AuditLogModule(str, Enum):
+    AUTH = "认证管理"
+    USER = "用户管理"
+    SCENIC_SPOT = "景点管理"
+    TICKET = "门票管理"
+    ORDER = "订单管理"
+    FINANCE = "财务管理"
+    DISTRIBUTION = "分销管理"
+    ATTENDANCE = "考勤管理"
+    SCHEDULE = "排班管理"
+    INVENTORY = "库存管理"
+    COMPLAINT = "投诉管理"
+    ANALYTICS = "数据分析"
+    SYSTEM = "系统管理"
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    username = Column(String(100), nullable=True)
+    
+    module = Column(SQLEnum(AuditLogModule), nullable=False, index=True)
+    action = Column(SQLEnum(AuditLogAction), nullable=False, index=True)
+    
+    target_id = Column(Integer, nullable=True)
+    target_type = Column(String(100), nullable=True)
+    
+    details = Column(Text, nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    user = relationship("User", foreign_keys=[user_id])
