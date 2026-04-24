@@ -3535,6 +3535,203 @@ app.include_router(finance_router)
 app.include_router(attendance_router)
 
 
+analytics_router = APIRouter(prefix="/analytics", tags=["智能大数据分析"])
+
+
+@analytics_router.get("/overview", response_model=schemas.AnalyticsOverview)
+def get_analytics_overview(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1)
+    
+    month_start = today_start.replace(day=1)
+    month_end = (month_start + timedelta(days=32)).replace(day=1)
+    
+    today_sales_total = db.query(func.sum(models.TicketOrder.total_price)).filter(
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.paid_at >= today_start,
+        models.TicketOrder.paid_at < today_end
+    ).scalar() or 0.0
+    
+    today_visitor_count = db.query(func.sum(models.TouristFlow.entry_count)).filter(
+        models.TouristFlow.record_time >= today_start,
+        models.TouristFlow.record_time < today_end
+    ).scalar() or 0
+    
+    all_recent_flows = db.query(models.TouristFlow).filter(
+        models.TouristFlow.record_time >= today_start - timedelta(hours=24)
+    ).all()
+    
+    current_in_scenic_count = sum(flow.entry_count for flow in all_recent_flows)
+    
+    month_income = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.INCOME,
+        models.FinancialLog.transaction_time >= month_start,
+        models.FinancialLog.transaction_time < month_end
+    ).scalar() or 0.0
+    
+    month_distribution = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.DISTRIBUTION_EXPENSE,
+        models.FinancialLog.transaction_time >= month_start,
+        models.FinancialLog.transaction_time < month_end
+    ).scalar() or 0.0
+    
+    month_refund = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.REFUND,
+        models.FinancialLog.transaction_time >= month_start,
+        models.FinancialLog.transaction_time < month_end
+    ).scalar() or 0.0
+    
+    month_total_profit = month_income - month_distribution - month_refund
+    
+    total_users = db.query(models.User).count()
+    member_users = db.query(models.User).filter(
+        models.User.member_level != models.MemberLevel.NORMAL
+    ).count()
+    
+    member_conversion_rate = (member_users / total_users * 100) if total_users > 0 else 0.0
+    
+    log_info(
+        message=f"大数据概览查询: 今日销售额={today_sales_total}, 今日入园={today_visitor_count}, 当前在园={current_in_scenic_count}, 本月利润={month_total_profit}, 会员转化率={member_conversion_rate}%",
+        action="ANALYTICS_OVERVIEW_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.AnalyticsOverview(
+        today_sales_total=round(today_sales_total, 2),
+        today_visitor_count=today_visitor_count,
+        current_in_scenic_count=current_in_scenic_count,
+        month_total_profit=round(month_total_profit, 2),
+        member_conversion_rate=round(member_conversion_rate, 2),
+        updated_at=now
+    )
+
+
+@analytics_router.get("/sales-trend", response_model=schemas.SalesTrendResponse)
+def get_sales_trend(
+    days: int = Query(7, ge=1, le=30, description="查询天数，默认7天"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    
+    now = datetime.utcnow()
+    period_end = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    period_start = period_end - timedelta(days=days)
+    
+    results = db.query(
+        func.date(models.TicketOrder.paid_at).label('order_date'),
+        func.count(models.TicketOrder.id).label('order_count'),
+        func.sum(models.TicketOrder.total_price).label('total_income')
+    ).filter(
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.paid_at >= period_start,
+        models.TicketOrder.paid_at < period_end
+    ).group_by(
+        func.date(models.TicketOrder.paid_at)
+    ).order_by(
+        'order_date'
+    ).all()
+    
+    daily_data = {}
+    for row in results:
+        date_str = str(row.order_date)
+        daily_data[date_str] = {
+            'order_count': row.order_count or 0,
+            'income': row.total_income or 0.0
+        }
+    
+    trend_data = []
+    current_date = period_start
+    while current_date < period_end:
+        date_str = current_date.strftime('%Y-%m-%d')
+        day_data = daily_data.get(date_str, {'order_count': 0, 'income': 0.0})
+        trend_data.append(schemas.DailySalesData(
+            date=date_str,
+            order_count=day_data['order_count'],
+            income=round(day_data['income'], 2)
+        ))
+        current_date += timedelta(days=1)
+    
+    log_info(
+        message=f"销售趋势查询: 天数={days}, 数据点={len(trend_data)}",
+        action="ANALYTICS_SALES_TREND_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.SalesTrendResponse(
+        data=trend_data,
+        period_start=period_start.strftime('%Y-%m-%d'),
+        period_end=(period_end - timedelta(days=1)).strftime('%Y-%m-%d')
+    )
+
+
+@analytics_router.get("/tourist-source", response_model=schemas.TouristSourceResponse)
+def get_tourist_source(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from collections import Counter
+    
+    users = db.query(models.User).all()
+    
+    source_counts = Counter()
+    for user in users:
+        source = "直接注册"
+        if user.member_level == models.MemberLevel.GOLD:
+            source = "黄金会员"
+        elif user.member_level == models.MemberLevel.SILVER:
+            source = "白银会员"
+        source_counts[source] += 1
+    
+    distributors = db.query(models.Distributor).all()
+    if distributors:
+        source_counts["分销渠道"] = len(distributors)
+    
+    total_count = sum(source_counts.values())
+    
+    source_data = []
+    for source, count in source_counts.most_common():
+        percentage = (count / total_count * 100) if total_count > 0 else 0.0
+        source_data.append(schemas.TouristSourceData(
+            source=source,
+            count=count,
+            percentage=round(percentage, 2)
+        ))
+    
+    log_info(
+        message=f"游客来源统计: 总数={total_count}, 来源类别={len(source_data)}",
+        action="ANALYTICS_TOURIST_SOURCE_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.TouristSourceResponse(
+        data=source_data,
+        total_count=total_count
+    )
+
+
+@analytics_router.get("/dashboard", tags=["智能大数据分析"])
+def get_dashboard_page():
+    dashboard_path = os.path.join(STATIC_DIR, "dashboard.html")
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path)
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="数据大屏页面不存在"
+    )
+
+
+app.include_router(analytics_router)
+
+
 if __name__ == "__main__":
     import uvicorn
     
