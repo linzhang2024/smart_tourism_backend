@@ -551,6 +551,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def setup_audit_db_session(request: Request, call_next):
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        audit_manager = security.get_audit_log_manager()
+        audit_manager.set_db_session(db)
+        response = await call_next(request)
+        return response
+    finally:
+        db.close()
+
+
+@app.middleware("http")
+async def mask_sensitive_response(request: Request, call_next):
+    response = await call_next(request)
+    
+    try:
+        if hasattr(response, 'media_type') and response.media_type == 'application/json':
+            import json
+            try:
+                body_bytes = None
+                
+                if hasattr(response, '_body'):
+                    body_bytes = response._body
+                elif hasattr(response, 'body'):
+                    if isinstance(response.body, bytes):
+                        body_bytes = response.body
+                
+                if body_bytes:
+                    body_str = body_bytes.decode('utf-8')
+                    data = json.loads(body_str)
+                    masked_data = security.mask_response_content(data)
+                    if masked_data != data:
+                        from fastapi.responses import JSONResponse
+                        new_response = JSONResponse(content=masked_data)
+                        new_response.status_code = response.status_code
+                        for key, value in response.headers.items():
+                            if key.lower() not in ['content-length', 'content-type']:
+                                new_response.headers[key] = value
+                        return new_response
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                pass
+            except Exception:
+                pass
+    except Exception:
+        pass
+    
+    return response
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 
@@ -4549,42 +4601,6 @@ async def get_system_doctor_page(
 
 
 app.include_router(system_dashboard_router)
-
-
-@app.middleware("http")
-async def mask_sensitive_response(request: Request, call_next):
-    response = await call_next(request)
-    
-    try:
-        if hasattr(response, 'body') and response.body:
-            import json
-            try:
-                body_str = response.body.decode('utf-8')
-                data = json.loads(body_str)
-                masked_data = security.mask_response_content(data)
-                if masked_data != data:
-                    new_body = json.dumps(masked_data, ensure_ascii=False, default=str).encode('utf-8')
-                    response.body = new_body
-                    response.headers['content-length'] = str(len(new_body))
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                pass
-    except Exception:
-        pass
-    
-    return response
-
-
-@app.middleware("http")
-async def setup_audit_db_session(request: Request, call_next):
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        audit_manager = security.get_audit_log_manager()
-        audit_manager.set_db_session(db)
-        response = await call_next(request)
-        return response
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":

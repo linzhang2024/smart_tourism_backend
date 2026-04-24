@@ -300,6 +300,17 @@ def rate_limit(rate: str = "60/minute"):
             allowed, max_requests, remaining = limiter.check_rate_limit(key, rate)
             
             if not allowed:
+                audit_manager = get_audit_log_manager()
+                audit_manager.log_action(
+                    user_id=None,
+                    module="SYSTEM",
+                    action="RATE_LIMIT_BLOCKED",
+                    target_id=None,
+                    target_type="RateLimit",
+                    details=f"限流触发: 路径 {path}, 限制 {rate}, 剩余等待 {int(remaining)} 秒",
+                    ip_address=client_ip
+                )
+                
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail=f"请求过于频繁，请在 {int(remaining)} 秒后重试。限制: {rate}",
