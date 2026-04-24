@@ -749,3 +749,66 @@ class TouristSourceData(BaseModel):
 class TouristSourceResponse(BaseModel):
     data: List[TouristSourceData]
     total_count: int
+
+
+class HourlyPrediction(BaseModel):
+    hour: int
+    predicted_visitors: int
+    confidence: float
+
+
+class FlowPredictionResponse(BaseModel):
+    peak_hour: int
+    peak_visitors: int
+    total_predicted_24h: int
+    hourly_data: List[HourlyPrediction]
+    prediction_basis_days: int
+    trend_direction: str
+    updated_at: datetime
+
+
+class MemberLevelStats(BaseModel):
+    member_level: str
+    user_count: int
+    total_orders: int
+    total_spent: float
+    avg_order_value: float
+    profit_contribution: float
+    profit_contribution_ratio: float
+
+
+class MemberAnalysisResponse(BaseModel):
+    total_users: int
+    total_members: int
+    conversion_rate: float
+    by_level: List[MemberLevelStats]
+    total_profit: float
+    updated_at: datetime
+
+
+class InventoryAlertItem(BaseModel):
+    spot_id: int
+    spot_name: str
+    total_inventory: int
+    remained_inventory: int
+    inventory_ratio: float
+    price_per_ticket: float
+    estimated_revenue_loss: float
+    alert_level: str
+
+
+class InventoryAlertResponse(BaseModel):
+    has_alerts: bool
+    alert_count: int
+    total_estimated_loss: float
+    alerts: List[InventoryAlertItem]
+    threshold: float
+    updated_at: datetime
+
+
+class SmartAnalyticsOverview(BaseModel):
+    overview: AnalyticsOverview
+    prediction: FlowPredictionResponse
+    member_analysis: MemberAnalysisResponse
+    inventory_alerts: InventoryAlertResponse
+    updated_at: datetime

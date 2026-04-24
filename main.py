@@ -3729,6 +3729,459 @@ def get_dashboard_page():
     )
 
 
+@analytics_router.get("/flow-prediction", response_model=schemas.FlowPredictionResponse, tags=["智能大数据分析"])
+def get_flow_prediction(
+    days: int = Query(7, ge=1, le=30, description="历史数据天数，默认7天"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    import statistics
+    
+    now = datetime.utcnow()
+    current_hour = now.hour
+    period_end = now
+    period_start = period_end - timedelta(days=days)
+    
+    hourly_data = db.query(
+        func.strftime('%H', models.TouristFlow.record_time).label('hour'),
+        func.strftime('%Y-%m-%d', models.TouristFlow.record_time).label('date'),
+        func.sum(models.TouristFlow.entry_count).label('total_visitors')
+    ).filter(
+        models.TouristFlow.record_time >= period_start,
+        models.TouristFlow.record_time < period_end
+    ).group_by(
+        func.strftime('%Y-%m-%d', models.TouristFlow.record_time),
+        func.strftime('%H', models.TouristFlow.record_time)
+    ).order_by(
+        'date', 'hour'
+    ).all()
+    
+    hourly_stats = {}
+    for row in hourly_data:
+        hour = int(row.hour)
+        if hour not in hourly_stats:
+            hourly_stats[hour] = []
+        hourly_stats[hour].append(row.total_visitors)
+    
+    daily_data = db.query(
+        func.date(models.TouristFlow.record_time).label('flow_date'),
+        func.sum(models.TouristFlow.entry_count).label('daily_visitors')
+    ).filter(
+        models.TouristFlow.record_time >= period_start,
+        models.TouristFlow.record_time < period_end
+    ).group_by(
+        func.date(models.TouristFlow.record_time)
+    ).order_by(
+        'flow_date'
+    ).all()
+    
+    daily_visitors = [row.daily_visitors for row in daily_data] if daily_data else [0]
+    
+    if len(daily_visitors) >= 2:
+        recent_avg = sum(daily_visitors[-3:]) / len(daily_visitors[-3:]) if len(daily_visitors) >= 3 else daily_visitors[-1]
+        older_avg = sum(daily_visitors[:-3]) / len(daily_visitors[:-3]) if len(daily_visitors) > 3 else daily_visitors[0] if daily_visitors else 0
+        
+        if recent_avg > older_avg * 1.1:
+            trend_direction = "上升"
+        elif recent_avg < older_avg * 0.9:
+            trend_direction = "下降"
+        else:
+            trend_direction = "平稳"
+    else:
+        trend_direction = "平稳"
+    
+    hourly_predictions = []
+    peak_hour = 14
+    peak_visitors = 0
+    
+    base_hourly_pattern = {
+        8: 0.5, 9: 0.7, 10: 0.9, 11: 0.95, 12: 0.85,
+        13: 0.75, 14: 1.0, 15: 0.95, 16: 0.9, 17: 0.8,
+        18: 0.6, 19: 0.4, 20: 0.2, 21: 0.1, 22: 0.05,
+        0: 0.02, 1: 0.01, 2: 0.01, 3: 0.01, 4: 0.01,
+        5: 0.02, 6: 0.05, 7: 0.3
+    }
+    
+    avg_daily_visitors = sum(daily_visitors) / len(daily_visitors) if daily_visitors else 100
+    
+    for hour_offset in range(24):
+        prediction_hour = (current_hour + hour_offset) % 24
+        
+        historical_values = hourly_stats.get(prediction_hour, [])
+        if historical_values:
+            avg_value = statistics.mean(historical_values)
+            if len(historical_values) > 1:
+                std_dev = statistics.stdev(historical_values)
+                confidence = max(0.5, 1.0 - (std_dev / (avg_value + 1)) * 0.5)
+            else:
+                confidence = 0.7
+        else:
+            pattern_factor = base_hourly_pattern.get(prediction_hour, 0.3)
+            avg_value = avg_daily_visitors * pattern_factor / 24 * 2
+            confidence = 0.5
+        
+        if prediction_hour >= 9 and prediction_hour <= 11:
+            trend_factor = 1.1 if trend_direction == "上升" else (0.9 if trend_direction == "下降" else 1.0)
+            predicted_visitors = int(avg_value * trend_factor)
+        elif prediction_hour >= 13 and prediction_hour <= 16:
+            trend_factor = 1.15 if trend_direction == "上升" else (0.85 if trend_direction == "下降" else 1.0)
+            predicted_visitors = int(avg_value * trend_factor)
+        else:
+            predicted_visitors = int(avg_value)
+        
+        predicted_visitors = max(0, predicted_visitors)
+        
+        hourly_predictions.append(schemas.HourlyPrediction(
+            hour=prediction_hour,
+            predicted_visitors=predicted_visitors,
+            confidence=round(confidence, 2)
+        ))
+        
+        if predicted_visitors > peak_visitors:
+            peak_visitors = predicted_visitors
+            peak_hour = prediction_hour
+    
+    total_predicted_24h = sum(h.predicted_visitors for h in hourly_predictions)
+    
+    log_info(
+        message=f"客流预测查询: 基于{days}天历史数据, 预测峰值={peak_visitors}人({peak_hour}时), 趋势={trend_direction}",
+        action="ANALYTICS_FLOW_PREDICTION_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.FlowPredictionResponse(
+        peak_hour=peak_hour,
+        peak_visitors=peak_visitors,
+        total_predicted_24h=total_predicted_24h,
+        hourly_data=hourly_predictions,
+        prediction_basis_days=days,
+        trend_direction=trend_direction,
+        updated_at=now
+    )
+
+
+@analytics_router.get("/member-analysis", response_model=schemas.MemberAnalysisResponse, tags=["智能大数据分析"])
+def get_member_analysis(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from sqlalchemy import func
+    from datetime import datetime, timedelta
+    from sqlalchemy.orm import joinedload
+    
+    now = datetime.utcnow()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_end = (month_start + timedelta(days=32)).replace(day=1)
+    
+    all_users = db.query(models.User).all()
+    
+    level_user_count = {
+        models.MemberLevel.GOLD: 0,
+        models.MemberLevel.SILVER: 0,
+        models.MemberLevel.NORMAL: 0
+    }
+    
+    for user in all_users:
+        level_user_count[user.member_level] += 1
+    
+    order_stats = db.query(
+        models.User.member_level,
+        func.count(models.TicketOrder.id).label('order_count'),
+        func.sum(models.TicketOrder.total_price).label('total_spent')
+    ).join(
+        models.TicketOrder, models.User.id == models.TicketOrder.user_id
+    ).filter(
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.paid_at >= month_start,
+        models.TicketOrder.paid_at < month_end
+    ).group_by(
+        models.User.member_level
+    ).all()
+    
+    level_order_stats = {}
+    for row in order_stats:
+        level_order_stats[row.member_level] = {
+            'order_count': row.order_count or 0,
+            'total_spent': row.total_spent or 0.0
+        }
+    
+    financial_income = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.INCOME,
+        models.FinancialLog.transaction_time >= month_start,
+        models.FinancialLog.transaction_time < month_end
+    ).scalar() or 0.0
+    
+    financial_distribution = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.DISTRIBUTION_EXPENSE,
+        models.FinancialLog.transaction_time >= month_start,
+        models.FinancialLog.transaction_time < month_end
+    ).scalar() or 0.0
+    
+    financial_refund = db.query(func.sum(models.FinancialLog.amount)).filter(
+        models.FinancialLog.transaction_type == models.TransactionType.REFUND,
+        models.FinancialLog.transaction_time >= month_start,
+        models.FinancialLog.transaction_time < month_end
+    ).scalar() or 0.0
+    
+    total_profit = financial_income - financial_distribution - financial_refund
+    
+    profit_margin = 0.70
+    
+    by_level = []
+    total_profit_contribution = 0.0
+    
+    level_order = [models.MemberLevel.GOLD, models.MemberLevel.SILVER, models.MemberLevel.NORMAL]
+    level_names = {
+        models.MemberLevel.GOLD: "黄金会员",
+        models.MemberLevel.SILVER: "白银会员",
+        models.MemberLevel.NORMAL: "普通用户"
+    }
+    
+    for level in level_order:
+        stats = level_order_stats.get(level, {'order_count': 0, 'total_spent': 0.0})
+        user_count = level_user_count.get(level, 0)
+        
+        if stats['order_count'] > 0:
+            avg_order_value = stats['total_spent'] / stats['order_count']
+        else:
+            avg_order_value = 0.0
+        
+        profit_contribution = stats['total_spent'] * profit_margin
+        total_profit_contribution += profit_contribution
+        
+        by_level.append(schemas.MemberLevelStats(
+            member_level=level_names[level],
+            user_count=user_count,
+            total_orders=stats['order_count'],
+            total_spent=round(stats['total_spent'], 2),
+            avg_order_value=round(avg_order_value, 2),
+            profit_contribution=round(profit_contribution, 2),
+            profit_contribution_ratio=0.0
+        ))
+    
+    for level_stat in by_level:
+        if total_profit_contribution > 0:
+            level_stat.profit_contribution_ratio = round(
+                level_stat.profit_contribution / total_profit_contribution * 100, 2
+            )
+    
+    total_users = len(all_users)
+    total_members = level_user_count[models.MemberLevel.GOLD] + level_user_count[models.MemberLevel.SILVER]
+    conversion_rate = (total_members / total_users * 100) if total_users > 0 else 0.0
+    
+    log_info(
+        message=f"会员分析查询: 总用户={total_users}, 会员={total_members}, 转化率={conversion_rate:.1f}%, 本月利润={total_profit:.2f}",
+        action="ANALYTICS_MEMBER_ANALYSIS_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.MemberAnalysisResponse(
+        total_users=total_users,
+        total_members=total_members,
+        conversion_rate=round(conversion_rate, 2),
+        by_level=by_level,
+        total_profit=round(total_profit, 2),
+        updated_at=now
+    )
+
+
+@analytics_router.get("/inventory-alerts", response_model=schemas.InventoryAlertResponse, tags=["智能大数据分析"])
+def get_inventory_alerts(
+    threshold: float = Query(0.10, ge=0.01, le=0.50, description="告警阈值比例，默认10%"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from datetime import datetime
+    
+    now = datetime.utcnow()
+    
+    all_spots = db.query(models.ScenicSpot).all()
+    
+    alerts = []
+    total_estimated_loss = 0.0
+    
+    for spot in all_spots:
+        if spot.total_inventory == 0:
+            inventory_ratio = 0.0
+        else:
+            inventory_ratio = spot.remained_inventory / spot.total_inventory
+        
+        if inventory_ratio <= threshold:
+            sold_tickets = spot.total_inventory - spot.remained_inventory
+            
+            if sold_tickets > 0:
+                avg_daily_sales = sold_tickets / 30
+                days_to_depletion = spot.remained_inventory / avg_daily_sales if avg_daily_sales > 0 else 0
+                
+                if inventory_ratio <= 0.05 or days_to_depletion <= 3:
+                    alert_level = "紧急"
+                elif inventory_ratio <= 0.10 or days_to_depletion <= 7:
+                    alert_level = "警告"
+                else:
+                    alert_level = "注意"
+            else:
+                alert_level = "注意" if inventory_ratio <= 0.10 else "警告"
+            
+            estimated_revenue_loss = (spot.total_inventory - spot.remained_inventory) * spot.price * 0.1
+            
+            total_estimated_loss += estimated_revenue_loss
+            
+            alerts.append(schemas.InventoryAlertItem(
+                spot_id=spot.id,
+                spot_name=spot.name,
+                total_inventory=spot.total_inventory,
+                remained_inventory=spot.remained_inventory,
+                inventory_ratio=round(inventory_ratio, 4),
+                price_per_ticket=round(spot.price, 2),
+                estimated_revenue_loss=round(estimated_revenue_loss, 2),
+                alert_level=alert_level
+            ))
+    
+    alerts.sort(key=lambda x: x.inventory_ratio)
+    
+    log_info(
+        message=f"库存预警查询: 阈值={threshold*100:.0f}%, 告警数量={len(alerts)}, 预估营收损失={total_estimated_loss:.2f}",
+        action="ANALYTICS_INVENTORY_ALERTS_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.InventoryAlertResponse(
+        has_alerts=len(alerts) > 0,
+        alert_count=len(alerts),
+        total_estimated_loss=round(total_estimated_loss, 2),
+        alerts=alerts,
+        threshold=threshold,
+        updated_at=now
+    )
+
+
+@analytics_router.get("/smart-overview", response_model=schemas.SmartAnalyticsOverview, tags=["智能大数据分析"])
+def get_smart_overview(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+    
+    now = datetime.utcnow()
+    
+    overview_data = get_analytics_overview.__wrapped__ if hasattr(get_analytics_overview, '__wrapped__') else get_analytics_overview
+    try:
+        overview = overview_data(db=db, current_user=current_user)
+    except:
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        month_start = today_start.replace(day=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1)
+        
+        today_sales_total = db.query(func.sum(models.TicketOrder.total_price)).filter(
+            models.TicketOrder.status == models.OrderStatus.PAID,
+            models.TicketOrder.paid_at >= today_start,
+            models.TicketOrder.paid_at < today_end
+        ).scalar() or 0.0
+        
+        today_visitor_count = db.query(func.sum(models.TouristFlow.entry_count)).filter(
+            models.TouristFlow.record_time >= today_start,
+            models.TouristFlow.record_time < today_end
+        ).scalar() or 0
+        
+        all_recent_flows = db.query(models.TouristFlow).filter(
+            models.TouristFlow.record_time >= today_start - timedelta(hours=24)
+        ).all()
+        current_in_scenic_count = sum(flow.entry_count for flow in all_recent_flows)
+        
+        month_income = db.query(func.sum(models.FinancialLog.amount)).filter(
+            models.FinancialLog.transaction_type == models.TransactionType.INCOME,
+            models.FinancialLog.transaction_time >= month_start,
+            models.FinancialLog.transaction_time < month_end
+        ).scalar() or 0.0
+        
+        month_distribution = db.query(func.sum(models.FinancialLog.amount)).filter(
+            models.FinancialLog.transaction_type == models.TransactionType.DISTRIBUTION_EXPENSE,
+            models.FinancialLog.transaction_time >= month_start,
+            models.FinancialLog.transaction_time < month_end
+        ).scalar() or 0.0
+        
+        month_refund = db.query(func.sum(models.FinancialLog.amount)).filter(
+            models.FinancialLog.transaction_type == models.TransactionType.REFUND,
+            models.FinancialLog.transaction_time >= month_start,
+            models.FinancialLog.transaction_time < month_end
+        ).scalar() or 0.0
+        
+        month_total_profit = month_income - month_distribution - month_refund
+        
+        total_users = db.query(models.User).count()
+        member_users = db.query(models.User).filter(
+            models.User.member_level != models.MemberLevel.NORMAL
+        ).count()
+        member_conversion_rate = (member_users / total_users * 100) if total_users > 0 else 0.0
+        
+        overview = schemas.AnalyticsOverview(
+            today_sales_total=round(today_sales_total, 2),
+            today_visitor_count=today_visitor_count,
+            current_in_scenic_count=current_in_scenic_count,
+            month_total_profit=round(month_total_profit, 2),
+            member_conversion_rate=round(member_conversion_rate, 2),
+            updated_at=now
+        )
+    
+    prediction_data = get_flow_prediction.__wrapped__ if hasattr(get_flow_prediction, '__wrapped__') else get_flow_prediction
+    try:
+        prediction = prediction_data(days=7, db=db, current_user=current_user)
+    except:
+        prediction = schemas.FlowPredictionResponse(
+            peak_hour=14,
+            peak_visitors=0,
+            total_predicted_24h=0,
+            hourly_data=[],
+            prediction_basis_days=7,
+            trend_direction="平稳",
+            updated_at=now
+        )
+    
+    member_data = get_member_analysis.__wrapped__ if hasattr(get_member_analysis, '__wrapped__') else get_member_analysis
+    try:
+        member_analysis = member_data(db=db, current_user=current_user)
+    except:
+        member_analysis = schemas.MemberAnalysisResponse(
+            total_users=0,
+            total_members=0,
+            conversion_rate=0.0,
+            by_level=[],
+            total_profit=0.0,
+            updated_at=now
+        )
+    
+    inventory_data = get_inventory_alerts.__wrapped__ if hasattr(get_inventory_alerts, '__wrapped__') else get_inventory_alerts
+    try:
+        inventory_alerts = inventory_data(threshold=0.10, db=db, current_user=current_user)
+    except:
+        inventory_alerts = schemas.InventoryAlertResponse(
+            has_alerts=False,
+            alert_count=0,
+            total_estimated_loss=0.0,
+            alerts=[],
+            threshold=0.10,
+            updated_at=now
+        )
+    
+    log_info(
+        message="智能概览聚合查询完成",
+        action="ANALYTICS_SMART_OVERVIEW_QUERIED",
+        tourist_id=current_user.id
+    )
+    
+    return schemas.SmartAnalyticsOverview(
+        overview=overview,
+        prediction=prediction,
+        member_analysis=member_analysis,
+        inventory_alerts=inventory_alerts,
+        updated_at=now
+    )
+
+
 app.include_router(analytics_router)
 
 

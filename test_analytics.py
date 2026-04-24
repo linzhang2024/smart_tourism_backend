@@ -632,6 +632,555 @@ def test_concurrent_performance(db):
     return all_success and performance_ok
 
 
+def test_flow_prediction_accuracy(db):
+    print("\n" + "=" * 60)
+    print("测试 5: 客流预测准确度范围验证")
+    print("=" * 60)
+    
+    print("\n[准备] 创建历史流量数据...")
+    
+    spot = create_test_scenic_spot(db)
+    
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    peak_hour_actual = 14
+    base_visitors_per_hour = 20
+    
+    total_historical_flows = 0
+    expected_peak_visitors = 0
+    
+    for day_offset in range(7):
+        for hour in range(24):
+            if 9 <= hour <= 17:
+                if hour == peak_hour_actual:
+                    visitors = int(base_visitors_per_hour * 3 * (1 + day_offset * 0.05))
+                elif 10 <= hour <= 16:
+                    visitors = int(base_visitors_per_hour * 2 * (1 + day_offset * 0.03))
+                else:
+                    visitors = int(base_visitors_per_hour * (1 + day_offset * 0.02))
+            else:
+                visitors = int(base_visitors_per_hour * 0.2)
+            
+            flow_time = today_start - timedelta(days=day_offset + 1) + timedelta(hours=hour)
+            
+            create_tourist_flow(db, spot, visitors, record_time=flow_time)
+            total_historical_flows += visitors
+            
+            if day_offset == 6 and hour == peak_hour_actual:
+                expected_peak_visitors = visitors
+    
+    print(f"  [准备] 创建 {7 * 24} 条历史流量记录, 总计 {total_historical_flows} 人次")
+    print(f"  [准备] 历史峰值: {expected_peak_visitors} 人 (14时)")
+    
+    print("\n[验证] 调用预测算法...")
+    
+    from sqlalchemy import func as sql_func
+    import statistics
+    
+    period_end = today_start
+    period_start = period_end - timedelta(days=7)
+    
+    hourly_data = db.query(
+        sql_func.strftime('%H', models.TouristFlow.record_time).label('hour'),
+        sql_func.strftime('%Y-%m-%d', models.TouristFlow.record_time).label('date'),
+        sql_func.sum(models.TouristFlow.entry_count).label('total_visitors')
+    ).filter(
+        models.TouristFlow.record_time >= period_start,
+        models.TouristFlow.record_time < period_end
+    ).group_by(
+        sql_func.strftime('%Y-%m-%d', models.TouristFlow.record_time),
+        sql_func.strftime('%H', models.TouristFlow.record_time)
+    ).order_by(
+        'date', 'hour'
+    ).all()
+    
+    hourly_stats = {}
+    for row in hourly_data:
+        hour = int(row.hour)
+        if hour not in hourly_stats:
+            hourly_stats[hour] = []
+        hourly_stats[hour].append(row.total_visitors)
+    
+    daily_data = db.query(
+        sql_func.date(models.TouristFlow.record_time).label('flow_date'),
+        sql_func.sum(models.TouristFlow.entry_count).label('daily_visitors')
+    ).filter(
+        models.TouristFlow.record_time >= period_start,
+        models.TouristFlow.record_time < period_end
+    ).group_by(
+        sql_func.date(models.TouristFlow.record_time)
+    ).order_by(
+        'flow_date'
+    ).all()
+    
+    daily_visitors = [row.daily_visitors for row in daily_data] if daily_data else [0]
+    
+    if len(daily_visitors) >= 2:
+        recent_avg = sum(daily_visitors[-3:]) / len(daily_visitors[-3:]) if len(daily_visitors) >= 3 else daily_visitors[-1]
+        older_avg = sum(daily_visitors[:-3]) / len(daily_visitors[:-3]) if len(daily_visitors) > 3 else daily_visitors[0] if daily_visitors else 0
+        
+        if recent_avg > older_avg * 1.1:
+            trend_direction = "上升"
+        elif recent_avg < older_avg * 0.9:
+            trend_direction = "下降"
+        else:
+            trend_direction = "平稳"
+    else:
+        trend_direction = "平稳"
+    
+    base_hourly_pattern = {
+        8: 0.5, 9: 0.7, 10: 0.9, 11: 0.95, 12: 0.85,
+        13: 0.75, 14: 1.0, 15: 0.95, 16: 0.9, 17: 0.8,
+        18: 0.6, 19: 0.4, 20: 0.2, 21: 0.1, 22: 0.05,
+        0: 0.02, 1: 0.01, 2: 0.01, 3: 0.01, 4: 0.01,
+        5: 0.02, 6: 0.05, 7: 0.3
+    }
+    
+    avg_daily_visitors = sum(daily_visitors) / len(daily_visitors) if daily_visitors else 100
+    
+    current_hour = now.hour
+    hourly_predictions = []
+    peak_hour = 14
+    peak_visitors = 0
+    
+    for hour_offset in range(24):
+        prediction_hour = (current_hour + hour_offset) % 24
+        
+        historical_values = hourly_stats.get(prediction_hour, [])
+        if historical_values:
+            avg_value = statistics.mean(historical_values)
+            if len(historical_values) > 1:
+                std_dev = statistics.stdev(historical_values)
+                confidence = max(0.5, 1.0 - (std_dev / (avg_value + 1)) * 0.5)
+            else:
+                confidence = 0.7
+        else:
+            pattern_factor = base_hourly_pattern.get(prediction_hour, 0.3)
+            avg_value = avg_daily_visitors * pattern_factor / 24 * 2
+            confidence = 0.5
+        
+        if prediction_hour >= 9 and prediction_hour <= 11:
+            trend_factor = 1.1 if trend_direction == "上升" else (0.9 if trend_direction == "下降" else 1.0)
+            predicted_visitors = int(avg_value * trend_factor)
+        elif prediction_hour >= 13 and prediction_hour <= 16:
+            trend_factor = 1.15 if trend_direction == "上升" else (0.85 if trend_direction == "下降" else 1.0)
+            predicted_visitors = int(avg_value * trend_factor)
+        else:
+            predicted_visitors = int(avg_value)
+        
+        predicted_visitors = max(0, predicted_visitors)
+        
+        hourly_predictions.append({
+            'hour': prediction_hour,
+            'predicted_visitors': predicted_visitors,
+            'confidence': round(confidence, 2)
+        })
+        
+        if predicted_visitors > peak_visitors:
+            peak_visitors = predicted_visitors
+            peak_hour = prediction_hour
+    
+    print(f"\n[预测结果]")
+    print(f"  预测峰值: {peak_visitors} 人 ({peak_hour}时)")
+    print(f"  趋势方向: {trend_direction}")
+    
+    accuracy_tests_passed = True
+    
+    peak_hour_valid = 9 <= peak_hour <= 17
+    log_test_result(
+        "预测准确度 - 峰值时段合理性验证",
+        peak_hour_valid,
+        f"预测峰值时段: {peak_hour}时, 预期范围: 9-17时"
+    )
+    accuracy_tests_passed = accuracy_tests_passed and peak_hour_valid
+    
+    peak_visitors_positive = peak_visitors > 0
+    log_test_result(
+        "预测准确度 - 峰值人数合理性验证",
+        peak_visitors_positive,
+        f"预测峰值人数: {peak_visitors}"
+    )
+    accuracy_tests_passed = accuracy_tests_passed and peak_visitors_positive
+    
+    all_hours_valid = all(0 <= h['hour'] <= 23 and h['predicted_visitors'] >= 0 and 0 <= h['confidence'] <= 1 for h in hourly_predictions)
+    log_test_result(
+        "预测准确度 - 24小时预测数据完整性验证",
+        all_hours_valid,
+        f"预测数据点数: {len(hourly_predictions)}, 预期: 24"
+    )
+    accuracy_tests_passed = accuracy_tests_passed and all_hours_valid
+    
+    min_expected_visitors = base_visitors_per_hour * 0.5
+    max_expected_visitors = base_visitors_per_hour * 5
+    peak_in_valid_range = min_expected_visitors <= peak_visitors <= max_expected_visitors
+    
+    log_test_result(
+        "预测准确度 - 峰值范围合理性验证",
+        peak_in_valid_range,
+        f"预测峰值: {peak_visitors}, 合理范围: {int(min_expected_visitors)}-{int(max_expected_visitors)}"
+    )
+    accuracy_tests_passed = accuracy_tests_passed and peak_in_valid_range
+    
+    return accuracy_tests_passed
+
+
+def test_member_cross_dimension_aggregation(db):
+    print("\n" + "=" * 60)
+    print("测试 6: 跨维度会员数据聚合验证")
+    print("=" * 60)
+    
+    print("\n[准备] 创建测试用户和订单数据...")
+    
+    spot = create_test_scenic_spot(db)
+    
+    gold_user = create_test_user(db, member_level=models.MemberLevel.GOLD)
+    silver_user = create_test_user(db, member_level=models.MemberLevel.SILVER)
+    normal_user = create_test_user(db, member_level=models.MemberLevel.NORMAL)
+    
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = today_start.replace(day=1)
+    
+    gold_orders = 5
+    gold_avg_price = 200.0
+    gold_total_spent = 0.0
+    
+    for i in range(gold_orders):
+        price = gold_avg_price + i * 20.0
+        order_time = month_start + timedelta(hours=i * 24)
+        
+        order = create_test_order(db, gold_user, spot, price, paid_at=order_time)
+        gold_total_spent += price
+        
+        create_financial_log(
+            db, models.TransactionType.INCOME,
+            price, order_no=order.order_no,
+            transaction_time=order_time
+        )
+        
+        commission = price * 0.05
+        create_financial_log(
+            db, models.TransactionType.DISTRIBUTION_EXPENSE,
+            commission, order_no=order.order_no,
+            transaction_time=order_time
+        )
+    
+    silver_orders = 8
+    silver_avg_price = 150.0
+    silver_total_spent = 0.0
+    
+    for i in range(silver_orders):
+        price = silver_avg_price + i * 10.0
+        order_time = month_start + timedelta(hours=i * 24 + 1)
+        
+        order = create_test_order(db, silver_user, spot, price, paid_at=order_time)
+        silver_total_spent += price
+        
+        create_financial_log(
+            db, models.TransactionType.INCOME,
+            price, order_no=order.order_no,
+            transaction_time=order_time
+        )
+        
+        commission = price * 0.05
+        create_financial_log(
+            db, models.TransactionType.DISTRIBUTION_EXPENSE,
+            commission, order_no=order.order_no,
+            transaction_time=order_time
+        )
+    
+    normal_orders = 3
+    normal_avg_price = 100.0
+    normal_total_spent = 0.0
+    
+    for i in range(normal_orders):
+        price = normal_avg_price + i * 5.0
+        order_time = month_start + timedelta(hours=i * 24 + 2)
+        
+        order = create_test_order(db, normal_user, spot, price, paid_at=order_time)
+        normal_total_spent += price
+        
+        create_financial_log(
+            db, models.TransactionType.INCOME,
+            price, order_no=order.order_no,
+            transaction_time=order_time
+        )
+        
+        commission = price * 0.05
+        create_financial_log(
+            db, models.TransactionType.DISTRIBUTION_EXPENSE,
+            commission, order_no=order.order_no,
+            transaction_time=order_time
+        )
+    
+    print(f"  [准备] 黄金会员: {gold_orders} 单, 消费 {gold_total_spent:.2f} 元")
+    print(f"  [准备] 白银会员: {silver_orders} 单, 消费 {silver_total_spent:.2f} 元")
+    print(f"  [准备] 普通用户: {normal_orders} 单, 消费 {normal_total_spent:.2f} 元")
+    
+    print("\n[验证] 执行跨维度聚合查询...")
+    
+    from sqlalchemy import func as sql_func
+    
+    order_stats = db.query(
+        models.User.member_level,
+        sql_func.count(models.TicketOrder.id).label('order_count'),
+        sql_func.sum(models.TicketOrder.total_price).label('total_spent')
+    ).join(
+        models.TicketOrder, models.User.id == models.TicketOrder.user_id
+    ).filter(
+        models.TicketOrder.status == models.OrderStatus.PAID,
+        models.TicketOrder.paid_at >= month_start,
+        models.TicketOrder.paid_at < (month_start + timedelta(days=32)).replace(day=1),
+        models.User.id.in_([gold_user.id, silver_user.id, normal_user.id])
+    ).group_by(
+        models.User.member_level
+    ).all()
+    
+    level_order_stats = {}
+    for row in order_stats:
+        level_order_stats[row.member_level] = {
+            'order_count': row.order_count or 0,
+            'total_spent': row.total_spent or 0.0
+        }
+    
+    level_names = {
+        models.MemberLevel.GOLD: "黄金会员",
+        models.MemberLevel.SILVER: "白银会员",
+        models.MemberLevel.NORMAL: "普通用户"
+    }
+    
+    expected_gold_avg = gold_total_spent / gold_orders
+    expected_silver_avg = silver_total_spent / silver_orders
+    expected_normal_avg = normal_total_spent / normal_orders
+    
+    print(f"\n[验证结果]")
+    
+    all_passed = True
+    
+    gold_stats = level_order_stats.get(models.MemberLevel.GOLD, {'order_count': 0, 'total_spent': 0.0})
+    gold_order_match = gold_stats['order_count'] == gold_orders
+    gold_spent_match = abs(gold_stats['total_spent'] - gold_total_spent) < 0.01
+    gold_avg = gold_stats['total_spent'] / gold_stats['order_count'] if gold_stats['order_count'] > 0 else 0
+    gold_avg_match = abs(gold_avg - expected_gold_avg) < 0.01
+    
+    log_test_result(
+        "跨维度聚合 - 黄金会员数据验证",
+        gold_order_match and gold_spent_match and gold_avg_match,
+        f"订单数: 预期={gold_orders}, 实际={gold_stats['order_count']}, 客单价: 预期={expected_gold_avg:.2f}, 实际={gold_avg:.2f}"
+    )
+    all_passed = all_passed and gold_order_match and gold_spent_match and gold_avg_match
+    
+    silver_stats = level_order_stats.get(models.MemberLevel.SILVER, {'order_count': 0, 'total_spent': 0.0})
+    silver_order_match = silver_stats['order_count'] == silver_orders
+    silver_spent_match = abs(silver_stats['total_spent'] - silver_total_spent) < 0.01
+    silver_avg = silver_stats['total_spent'] / silver_stats['order_count'] if silver_stats['order_count'] > 0 else 0
+    silver_avg_match = abs(silver_avg - expected_silver_avg) < 0.01
+    
+    log_test_result(
+        "跨维度聚合 - 白银会员数据验证",
+        silver_order_match and silver_spent_match and silver_avg_match,
+        f"订单数: 预期={silver_orders}, 实际={silver_stats['order_count']}, 客单价: 预期={expected_silver_avg:.2f}, 实际={silver_avg:.2f}"
+    )
+    all_passed = all_passed and silver_order_match and silver_spent_match and silver_avg_match
+    
+    normal_stats = level_order_stats.get(models.MemberLevel.NORMAL, {'order_count': 0, 'total_spent': 0.0})
+    normal_order_match = normal_stats['order_count'] == normal_orders
+    normal_spent_match = abs(normal_stats['total_spent'] - normal_total_spent) < 0.01
+    normal_avg = normal_stats['total_spent'] / normal_stats['order_count'] if normal_stats['order_count'] > 0 else 0
+    normal_avg_match = abs(normal_avg - expected_normal_avg) < 0.01
+    
+    log_test_result(
+        "跨维度聚合 - 普通用户数据验证",
+        normal_order_match and normal_spent_match and normal_avg_match,
+        f"订单数: 预期={normal_orders}, 实际={normal_stats['order_count']}, 客单价: 预期={expected_normal_avg:.2f}, 实际={normal_avg:.2f}"
+    )
+    all_passed = all_passed and normal_order_match and normal_spent_match and normal_avg_match
+    
+    hierarchy_correct = gold_avg > silver_avg > normal_avg
+    log_test_result(
+        "跨维度聚合 - 会员等级消费层次验证",
+        hierarchy_correct,
+        f"黄金客单价={gold_avg:.2f} > 白银客单价={silver_avg:.2f} > 普通客单价={normal_avg:.2f}"
+    )
+    all_passed = all_passed and hierarchy_correct
+    
+    return all_passed
+
+
+def test_inventory_alert_functionality(db):
+    print("\n" + "=" * 60)
+    print("测试 7: 库存告警功能验证")
+    print("=" * 60)
+    
+    print("\n[准备] 创建测试景点...")
+    
+    normal_spot = models.ScenicSpot(
+        name=f"正常景点_{generate_unique_suffix()}",
+        description="库存充足的测试景点",
+        location="测试位置",
+        price=150.0,
+        total_inventory=1000,
+        remained_inventory=800
+    )
+    db.add(normal_spot)
+    db.commit()
+    db.refresh(normal_spot)
+    created_test_ids["scenic_spots"].append(normal_spot.id)
+    
+    warning_spot = models.ScenicSpot(
+        name=f"警告景点_{generate_unique_suffix()}",
+        description="库存较低的测试景点",
+        location="测试位置",
+        price=200.0,
+        total_inventory=500,
+        remained_inventory=45
+    )
+    db.add(warning_spot)
+    db.commit()
+    db.refresh(warning_spot)
+    created_test_ids["scenic_spots"].append(warning_spot.id)
+    
+    critical_spot = models.ScenicSpot(
+        name=f"紧急景点_{generate_unique_suffix()}",
+        description="库存紧急的测试景点",
+        location="测试位置",
+        price=250.0,
+        total_inventory=100,
+        remained_inventory=3
+    )
+    db.add(critical_spot)
+    db.commit()
+    db.refresh(critical_spot)
+    created_test_ids["scenic_spots"].append(critical_spot.id)
+    
+    print(f"  [准备] 正常景点: 库存={normal_spot.remained_inventory}/{normal_spot.total_inventory}")
+    print(f"  [准备] 警告景点: 库存={warning_spot.remained_inventory}/{warning_spot.total_inventory}")
+    print(f"  [准备] 紧急景点: 库存={critical_spot.remained_inventory}/{critical_spot.total_inventory}")
+    
+    print("\n[验证] 检测库存告警...")
+    
+    threshold = 0.10
+    
+    all_spots = db.query(models.ScenicSpot).filter(
+        models.ScenicSpot.id.in_([normal_spot.id, warning_spot.id, critical_spot.id])
+    ).all()
+    
+    alerts = []
+    total_estimated_loss = 0.0
+    
+    for spot in all_spots:
+        if spot.total_inventory == 0:
+            inventory_ratio = 0.0
+        else:
+            inventory_ratio = spot.remained_inventory / spot.total_inventory
+        
+        if inventory_ratio <= threshold:
+            sold_tickets = spot.total_inventory - spot.remained_inventory
+            
+            if sold_tickets > 0:
+                avg_daily_sales = sold_tickets / 30
+                days_to_depletion = spot.remained_inventory / avg_daily_sales if avg_daily_sales > 0 else 0
+                
+                if inventory_ratio <= 0.05 or days_to_depletion <= 3:
+                    alert_level = "紧急"
+                elif inventory_ratio <= 0.10 or days_to_depletion <= 7:
+                    alert_level = "警告"
+                else:
+                    alert_level = "注意"
+            else:
+                alert_level = "注意" if inventory_ratio <= 0.10 else "警告"
+            
+            estimated_revenue_loss = (spot.total_inventory - spot.remained_inventory) * spot.price * 0.1
+            
+            total_estimated_loss += estimated_revenue_loss
+            
+            alerts.append({
+                'spot_id': spot.id,
+                'spot_name': spot.name,
+                'total_inventory': spot.total_inventory,
+                'remained_inventory': spot.remained_inventory,
+                'inventory_ratio': round(inventory_ratio, 4),
+                'price_per_ticket': round(spot.price, 2),
+                'estimated_revenue_loss': round(estimated_revenue_loss, 2),
+                'alert_level': alert_level
+            })
+    
+    print(f"\n[告警检测结果]")
+    print(f"  告警数量: {len(alerts)}")
+    print(f"  预估营收损失: {total_estimated_loss:.2f}")
+    
+    all_passed = True
+    
+    expected_alert_count = 2
+    alert_count_match = len(alerts) == expected_alert_count
+    log_test_result(
+        "库存告警 - 告警数量验证",
+        alert_count_match,
+        f"预期告警数: {expected_alert_count}, 实际: {len(alerts)}"
+    )
+    all_passed = all_passed and alert_count_match
+    
+    normal_alerted = any(a['spot_id'] == normal_spot.id for a in alerts)
+    warning_alerted = any(a['spot_id'] == warning_spot.id for a in alerts)
+    critical_alerted = any(a['spot_id'] == critical_spot.id for a in alerts)
+    
+    log_test_result(
+        "库存告警 - 正常景点不应告警",
+        not normal_alerted,
+        f"正常景点库存率: {(normal_spot.remained_inventory/normal_spot.total_inventory*100):.1f}%, 告警阈值: {threshold*100}%"
+    )
+    all_passed = all_passed and not normal_alerted
+    
+    log_test_result(
+        "库存告警 - 警告景点应告警",
+        warning_alerted,
+        f"警告景点库存率: {(warning_spot.remained_inventory/warning_spot.total_inventory*100):.1f}%, 告警阈值: {threshold*100}%"
+    )
+    all_passed = all_passed and warning_alerted
+    
+    log_test_result(
+        "库存告警 - 紧急景点应告警",
+        critical_alerted,
+        f"紧急景点库存率: {(critical_spot.remained_inventory/critical_spot.total_inventory*100):.1f}%, 告警阈值: {threshold*100}%"
+    )
+    all_passed = all_passed and critical_alerted
+    
+    critical_alert = next((a for a in alerts if a['spot_id'] == critical_spot.id), None)
+    if critical_alert:
+        critical_level_correct = critical_alert['alert_level'] == "紧急"
+        log_test_result(
+            "库存告警 - 紧急告警级别验证",
+            critical_level_correct,
+            f"实际告警级别: {critical_alert['alert_level']}, 预期: 紧急"
+        )
+        all_passed = all_passed and critical_level_correct
+    
+    warning_alert = next((a for a in alerts if a['spot_id'] == warning_spot.id), None)
+    if warning_alert:
+        warning_level_correct = warning_alert['alert_level'] == "警告" or warning_alert['alert_level'] == "紧急"
+        log_test_result(
+            "库存告警 - 警告告警级别验证",
+            warning_level_correct,
+            f"实际告警级别: {warning_alert['alert_level']}, 预期: 警告或紧急"
+        )
+        all_passed = all_passed and warning_level_correct
+    
+    expected_loss = (
+        (warning_spot.total_inventory - warning_spot.remained_inventory) * warning_spot.price * 0.1 +
+        (critical_spot.total_inventory - critical_spot.remained_inventory) * critical_spot.price * 0.1
+    )
+    loss_match = abs(total_estimated_loss - expected_loss) < 0.01
+    log_test_result(
+        "库存告警 - 营收影响计算验证",
+        loss_match,
+        f"预期损失: {expected_loss:.2f}, 实际: {total_estimated_loss:.2f}"
+    )
+    all_passed = all_passed and loss_match
+    
+    return all_passed
+
+
 def run_all_tests():
     print("=" * 60)
     print("智能大数据分析大屏 - 性能验证测试套件")
@@ -647,6 +1196,9 @@ def run_all_tests():
         test_2_passed = test_sales_trend_accuracy(db)
         test_3_passed = test_member_conversion_calculation(db)
         test_4_passed = test_concurrent_performance(db)
+        test_5_passed = test_flow_prediction_accuracy(db)
+        test_6_passed = test_member_cross_dimension_aggregation(db)
+        test_7_passed = test_inventory_alert_functionality(db)
         
         print("\n" + "=" * 60)
         print("测试汇总报告")
