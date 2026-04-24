@@ -325,19 +325,51 @@ class MemberProfileResponse(BaseModel):
         from_attributes = True
 
 
+class CouponType(str, Enum):
+    FIXED_AMOUNT = "满减券"
+    DISCOUNT = "折扣券"
+
+
 class CouponBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="优惠券名称")
-    face_value: int = Field(..., ge=1, description="面值（元）")
-    points_required: int = Field(..., ge=1, description="所需积分")
+    coupon_type: CouponType = Field(default=CouponType.FIXED_AMOUNT, description="优惠券类型")
+    discount_value: float = Field(..., ge=0, description="优惠金额或折扣比例")
+    discount_percentage: Optional[float] = Field(None, ge=0, le=1, description="折扣比例（折扣券专用，如0.8表示8折）")
+    min_spend: float = Field(default=0.0, ge=0, description="最低消费门槛")
+    max_discount: Optional[float] = Field(None, ge=0, description="折扣券最大减免金额")
+    valid_from: datetime = Field(default_factory=datetime.utcnow, description="有效期开始时间")
+    valid_to: datetime = Field(..., description="有效期结束时间")
+    total_stock: int = Field(default=100, ge=0, description="总库存")
+    remained_stock: int = Field(default=100, ge=0, description="剩余库存")
+    points_required: int = Field(default=0, ge=0, description="兑换所需积分")
+    target_member_level: Optional[MemberLevel] = Field(None, description="目标会员等级")
+    target_scenic_spot_id: Optional[int] = Field(None, description="目标景点ID")
+    is_active: bool = Field(default=True, description="是否激活")
 
 
 class CouponCreate(CouponBase):
     pass
 
 
+class CouponUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="优惠券名称")
+    coupon_type: Optional[CouponType] = Field(None, description="优惠券类型")
+    discount_value: Optional[float] = Field(None, ge=0, description="优惠金额或折扣比例")
+    discount_percentage: Optional[float] = Field(None, ge=0, le=1, description="折扣比例")
+    min_spend: Optional[float] = Field(None, ge=0, description="最低消费门槛")
+    max_discount: Optional[float] = Field(None, ge=0, description="最大减免金额")
+    valid_from: Optional[datetime] = Field(None, description="有效期开始时间")
+    valid_to: Optional[datetime] = Field(None, description="有效期结束时间")
+    total_stock: Optional[int] = Field(None, ge=0, description="总库存")
+    remained_stock: Optional[int] = Field(None, ge=0, description="剩余库存")
+    points_required: Optional[int] = Field(None, ge=0, description="所需积分")
+    target_member_level: Optional[MemberLevel] = Field(None, description="目标会员等级")
+    target_scenic_spot_id: Optional[int] = Field(None, description="目标景点ID")
+    is_active: Optional[bool] = Field(None, description="是否激活")
+
+
 class Coupon(CouponBase):
     id: int
-    is_active: bool
     created_at: datetime
 
     class Config:
@@ -906,3 +938,50 @@ class SystemDoctorDashboard(BaseModel):
     health: SystemHealthResponse
     recent_audit_logs: List[AuditLog]
     updated_at: datetime
+
+
+class TimeLimitedCommissionBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="限时高佣活动名称")
+    distributor_id: Optional[int] = Field(None, description="指定分销商ID，为空表示所有分销商")
+    scenic_spot_id: Optional[int] = Field(None, description="指定景点ID，为空表示所有景点")
+    commission_rate: float = Field(..., ge=0, le=1, description="佣金比例")
+    valid_from: datetime = Field(default_factory=datetime.utcnow, description="有效期开始时间")
+    valid_to: datetime = Field(..., description="有效期结束时间")
+    is_active: bool = Field(default=True, description="是否激活")
+
+
+class TimeLimitedCommissionCreate(TimeLimitedCommissionBase):
+    pass
+
+
+class TimeLimitedCommissionUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100, description="限时高佣活动名称")
+    distributor_id: Optional[int] = Field(None, description="指定分销商ID")
+    scenic_spot_id: Optional[int] = Field(None, description="指定景点ID")
+    commission_rate: Optional[float] = Field(None, ge=0, le=1, description="佣金比例")
+    valid_from: Optional[datetime] = Field(None, description="有效期开始时间")
+    valid_to: Optional[datetime] = Field(None, description="有效期结束时间")
+    is_active: Optional[bool] = Field(None, description="是否激活")
+
+
+class TimeLimitedCommission(TimeLimitedCommissionBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AssignCouponRequest(BaseModel):
+    coupon_id: int = Field(..., description="优惠券ID")
+    target_member_level: Optional[MemberLevel] = Field(None, description="目标会员等级，为空表示所有等级")
+    user_ids: Optional[List[int]] = Field(None, description="指定用户ID列表，为空则根据会员等级筛选")
+    send_notification: bool = Field(default=True, description="是否发送通知")
+
+
+class AssignCouponResponse(BaseModel):
+    success: bool
+    message: str
+    assigned_count: int = 0
+    failed_count: int = 0
+    failed_user_ids: List[int] = []

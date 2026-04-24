@@ -1087,6 +1087,38 @@ async def purchase_ticket(
             )
             raise HTTPException(status_code=404, detail="用户不存在")
         
+        scenic_spot = db.query(models.ScenicSpot).filter(
+            models.ScenicSpot.id == order_data.scenic_spot_id
+        ).first()
+        
+        if scenic_spot is None:
+            log_error(
+                message="景点不存在",
+                action="VALIDATION_FAILED",
+                tourist_id=order_data.user_id,
+                scenic_spot_id=order_data.scenic_spot_id
+            )
+            raise HTTPException(status_code=404, detail="景点不存在")
+        
+        log_info(
+            message=f"当前库存: {scenic_spot.remained_inventory}",
+            action="INVENTORY_CHECK",
+            scenic_spot_id=order_data.scenic_spot_id,
+            remaining_inventory=scenic_spot.remained_inventory
+        )
+        
+        original_total_price = scenic_spot.price * order_data.quantity
+        discounted_price, discount_amount = calculate_discounted_price(
+            original_total_price, user.member_level
+        )
+        
+        log_info(
+            message=f"会员折扣计算: 原价={original_total_price}, 折扣后={discounted_price}, 减免={discount_amount}, 会员等级={user.member_level.value}",
+            action="MEMBER_DISCOUNT_CALCULATED",
+            tourist_id=order_data.user_id,
+            scenic_spot_id=order_data.scenic_spot_id
+        )
+        
         if order_data.user_coupon_id is not None:
             user_coupon = db.query(models.UserCoupon).filter(
                 models.UserCoupon.id == order_data.user_coupon_id
@@ -1135,33 +1167,46 @@ async def purchase_ticket(
                 )
             
             db.refresh(user_coupon, ['coupon'])
-            coupon_value = user_coupon.coupon.face_value if user_coupon.coupon else 0
             
-            log_info(
-                message=f"优惠券验证通过: coupon_id={user_coupon.id}, redemption_code={user_coupon.redemption_code}, 面值={coupon_value} 元",
-                action="COUPON_VALIDATED",
-                tourist_id=order_data.user_id
-            )
-        
-        scenic_spot = db.query(models.ScenicSpot).filter(
-            models.ScenicSpot.id == order_data.scenic_spot_id
-        ).first()
-        
-        if scenic_spot is None:
-            log_error(
-                message="景点不存在",
-                action="VALIDATION_FAILED",
-                tourist_id=order_data.user_id,
-                scenic_spot_id=order_data.scenic_spot_id
-            )
-            raise HTTPException(status_code=404, detail="景点不存在")
-        
-        log_info(
-            message=f"当前库存: {scenic_spot.remained_inventory}",
-            action="INVENTORY_CHECK",
-            scenic_spot_id=order_data.scenic_spot_id,
-            remaining_inventory=scenic_spot.remained_inventory
-        )
+            if user_coupon.coupon:
+                coupon_discount_amount, is_valid, coupon_message = calculate_coupon_discount(
+                    discounted_price,
+                    user_coupon.coupon,
+                    order_data.scenic_spot_id
+                )
+                
+                if not is_valid:
+                    log_error(
+                        message=f"优惠券验证失败: coupon_id={user_coupon.id}, reason={coupon_message}",
+                        action="COUPON_VALIDATION_FAILED",
+                        tourist_id=order_data.user_id
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=coupon_message
+                    )
+                
+                coupon_value = coupon_discount_amount
+                
+                log_info(
+                    message=f"优惠券验证通过: coupon_id={user_coupon.id}, redemption_code={user_coupon.redemption_code}, 类型={user_coupon.coupon.coupon_type.value}, 优惠金额={coupon_value} 元",
+                    action="COUPON_VALIDATED",
+                    tourist_id=order_data.user_id
+                )
+            else:
+                coupon_value = 0
+                log_error(
+                    message=f"优惠券数据不完整: coupon_id={user_coupon.id}",
+                    action="COUPON_DATA_INCOMPLETE",
+                    tourist_id=order_data.user_id
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="优惠券数据不完整"
+                )
+        else:
+            user_coupon = None
+            coupon_value = 0
         
         update_stmt = sql_update(models.ScenicSpot).where(
             models.ScenicSpot.id == order_data.scenic_spot_id,
@@ -1217,18 +1262,6 @@ async def purchase_ticket(
             remaining_inventory=scenic_spot.remained_inventory
         )
         
-        original_total_price = scenic_spot.price * order_data.quantity
-        discounted_price, discount_amount = calculate_discounted_price(
-            original_total_price, user.member_level
-        )
-        
-        log_info(
-            message=f"会员折扣计算: 原价={original_total_price}, 折扣后={discounted_price}, 减免={discount_amount}, 会员等级={user.member_level.value}",
-            action="MEMBER_DISCOUNT_CALCULATED",
-            tourist_id=order_data.user_id,
-            scenic_spot_id=order_data.scenic_spot_id
-        )
-        
         total_price = discounted_price
         
         coupon_discount = 0
@@ -1237,24 +1270,42 @@ async def purchase_ticket(
             total_price = max(0, total_price - coupon_discount)
             
             log_info(
-                message=f"优惠券抵扣: 面值={coupon_value} 元, 实际抵扣={coupon_discount} 元, 最终价格={total_price} 元",
+                message=f"优惠券抵扣: 优惠金额={coupon_value} 元, 实际抵扣={coupon_discount} 元, 最终价格={total_price} 元",
                 action="COUPON_APPLIED",
                 tourist_id=order_data.user_id,
                 redemption_code=user_coupon.redemption_code
             )
         
         commission_amount = 0.0
+        commission_rate = 0.0
+        used_time_limited = False
         if distributor:
-            commission_amount = total_price * distributor.commission_rate
-            log_info(
-                message=f"订单已绑定分销商: 分销商ID={distributor.id}, 邀请码={distributor.distributor_code}, 佣金比例={distributor.commission_rate*100}%, 订单金额={total_price}元, 佣金={commission_amount}元",
-                action="DISTRIBUTOR_BOUND",
-                order_id=order.order_no,
-                tourist_id=order_data.user_id,
-                scenic_spot_id=order_data.scenic_spot_id,
-                commission_rate=distributor.commission_rate,
-                commission_amount=commission_amount
+            commission_rate = get_applicable_commission_rate(
+                db, distributor, order_data.scenic_spot_id
             )
+            used_time_limited = (commission_rate != distributor.commission_rate)
+            commission_amount = total_price * commission_rate
+            
+            if used_time_limited:
+                log_info(
+                    message=f"订单已绑定分销商（限时高佣）: 分销商ID={distributor.id}, 邀请码={distributor.distributor_code}, 原佣金比例={distributor.commission_rate*100}%, 限时佣金比例={commission_rate*100}%, 订单金额={total_price}元, 佣金={commission_amount}元",
+                    action="DISTRIBUTOR_BOUND_TIME_LIMITED",
+                    order_id=order.order_no,
+                    tourist_id=order_data.user_id,
+                    scenic_spot_id=order_data.scenic_spot_id,
+                    commission_rate=commission_rate,
+                    commission_amount=commission_amount
+                )
+            else:
+                log_info(
+                    message=f"订单已绑定分销商: 分销商ID={distributor.id}, 邀请码={distributor.distributor_code}, 佣金比例={commission_rate*100}%, 订单金额={total_price}元, 佣金={commission_amount}元",
+                    action="DISTRIBUTOR_BOUND",
+                    order_id=order.order_no,
+                    tourist_id=order_data.user_id,
+                    scenic_spot_id=order_data.scenic_spot_id,
+                    commission_rate=commission_rate,
+                    commission_amount=commission_amount
+                )
         
         order = models.TicketOrder(
             user_id=order_data.user_id,
@@ -1500,6 +1551,67 @@ def calculate_discounted_price(original_price: float, member_level: models.Membe
     discounted_price = original_price * discount_rate
     discount_amount = original_price - discounted_price
     return round(discounted_price, 2), round(discount_amount, 2)
+
+
+def calculate_coupon_discount(
+    total_price: float,
+    coupon: models.Coupon,
+    scenic_spot_id: int
+) -> tuple[float, bool, str]:
+    if not coupon.is_active:
+        return 0.0, False, "优惠券已下架"
+    
+    now = datetime.utcnow()
+    if coupon.valid_from > now:
+        return 0.0, False, "优惠券尚未生效"
+    if coupon.valid_to < now:
+        return 0.0, False, "优惠券已过期"
+    
+    if coupon.target_scenic_spot_id and coupon.target_scenic_spot_id != scenic_spot_id:
+        return 0.0, False, "该优惠券不适用于当前景点"
+    
+    if total_price < coupon.min_spend:
+        return 0.0, False, f"未达到最低消费门槛 {coupon.min_spend} 元"
+    
+    if coupon.coupon_type == models.CouponType.FIXED_AMOUNT:
+        discount_amount = coupon.discount_value
+    elif coupon.coupon_type == models.CouponType.DISCOUNT:
+        if coupon.discount_percentage is None:
+            return 0.0, False, "折扣券配置错误"
+        discount_amount = total_price * (1 - coupon.discount_percentage)
+        if coupon.max_discount:
+            discount_amount = min(discount_amount, coupon.max_discount)
+    else:
+        return 0.0, False, "未知的优惠券类型"
+    
+    discount_amount = round(discount_amount, 2)
+    
+    return discount_amount, True, "优惠券可用"
+
+
+def get_applicable_commission_rate(
+    db: Session,
+    distributor: models.Distributor,
+    scenic_spot_id: int
+) -> float:
+    now = datetime.utcnow()
+    
+    time_limited = db.query(models.TimeLimitedCommission).filter(
+        models.TimeLimitedCommission.is_active == True,
+        models.TimeLimitedCommission.valid_from <= now,
+        models.TimeLimitedCommission.valid_to >= now
+    ).order_by(
+        models.TimeLimitedCommission.created_at.desc()
+    ).all()
+    
+    for tlc in time_limited:
+        if tlc.distributor_id and tlc.distributor_id != distributor.id:
+            continue
+        if tlc.scenic_spot_id and tlc.scenic_spot_id != scenic_spot_id:
+            continue
+        return tlc.commission_rate
+    
+    return distributor.commission_rate
 
 
 @app.get("/tickets/recent-success", response_model=List[schemas.TicketSuccessBrief], tags=["门票支付"])
@@ -2351,6 +2463,452 @@ def get_distributor_finance_orders(
         ))
     
     return result
+
+
+marketing_router = APIRouter(prefix="/marketing", tags=["营销引擎与精细化运营"])
+
+
+@marketing_router.post("/coupons", response_model=schemas.Coupon, status_code=status.HTTP_201_CREATED)
+def create_coupon(
+    coupon_data: schemas.CouponCreate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    if coupon_data.coupon_type == models.CouponType.DISCOUNT:
+        if coupon_data.discount_percentage is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="折扣券必须指定折扣比例"
+            )
+        if coupon_data.discount_percentage <= 0 or coupon_data.discount_percentage >= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="折扣比例必须在 0 到 1 之间（不包括边界）"
+            )
+    
+    if coupon_data.valid_to <= coupon_data.valid_from:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="有效期结束时间必须晚于开始时间"
+        )
+    
+    new_coupon = models.Coupon(
+        name=coupon_data.name,
+        coupon_type=coupon_data.coupon_type,
+        discount_value=coupon_data.discount_value,
+        discount_percentage=coupon_data.discount_percentage,
+        min_spend=coupon_data.min_spend,
+        max_discount=coupon_data.max_discount,
+        valid_from=coupon_data.valid_from,
+        valid_to=coupon_data.valid_to,
+        total_stock=coupon_data.total_stock,
+        remained_stock=coupon_data.remained_stock,
+        points_required=coupon_data.points_required,
+        target_member_level=coupon_data.target_member_level,
+        target_scenic_spot_id=coupon_data.target_scenic_spot_id,
+        is_active=coupon_data.is_active
+    )
+    
+    db.add(new_coupon)
+    db.commit()
+    db.refresh(new_coupon)
+    
+    log_info(
+        message=f"管理员 [{current_admin.id}] 创建了优惠券: {new_coupon.name}",
+        action="COUPON_CREATED",
+        tourist_id=current_admin.id
+    )
+    
+    return new_coupon
+
+
+@marketing_router.get("/coupons", response_model=List[schemas.Coupon])
+def list_coupons(
+    is_active: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    query = db.query(models.Coupon)
+    
+    if is_active is not None:
+        query = query.filter(models.Coupon.is_active == is_active)
+    
+    coupons = query.order_by(models.Coupon.created_at.desc()).offset(skip).limit(limit).all()
+    return coupons
+
+
+@marketing_router.get("/coupons/{coupon_id}", response_model=schemas.Coupon)
+def get_coupon(
+    coupon_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    coupon = db.query(models.Coupon).filter(models.Coupon.id == coupon_id).first()
+    if coupon is None:
+        raise HTTPException(status_code=404, detail="优惠券不存在")
+    return coupon
+
+
+@marketing_router.put("/coupons/{coupon_id}", response_model=schemas.Coupon)
+def update_coupon(
+    coupon_id: int,
+    coupon_data: schemas.CouponUpdate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    coupon = db.query(models.Coupon).filter(models.Coupon.id == coupon_id).first()
+    if coupon is None:
+        raise HTTPException(status_code=404, detail="优惠券不存在")
+    
+    update_data = coupon_data.model_dump(exclude_unset=True)
+    
+    if "valid_from" in update_data and "valid_to" in update_data:
+        if update_data["valid_to"] <= update_data["valid_from"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="有效期结束时间必须晚于开始时间"
+            )
+    
+    for key, value in update_data.items():
+        setattr(coupon, key, value)
+    
+    db.commit()
+    db.refresh(coupon)
+    
+    log_info(
+        message=f"管理员 [{current_admin.id}] 更新了优惠券: {coupon.name}",
+        action="COUPON_UPDATED",
+        tourist_id=current_admin.id
+    )
+    
+    return coupon
+
+
+@marketing_router.delete("/coupons/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_coupon(
+    coupon_id: int,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    coupon = db.query(models.Coupon).filter(models.Coupon.id == coupon_id).first()
+    if coupon is None:
+        raise HTTPException(status_code=404, detail="优惠券不存在")
+    
+    coupon_name = coupon.name
+    db.delete(coupon)
+    db.commit()
+    
+    log_info(
+        message=f"管理员 [{current_admin.id}] 删除了优惠券: {coupon_name}",
+        action="COUPON_DELETED",
+        tourist_id=current_admin.id
+    )
+
+
+@marketing_router.post("/assign-coupon", response_model=schemas.AssignCouponResponse)
+def assign_coupon(
+    request: Request,
+    assign_data: schemas.AssignCouponRequest,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    coupon = db.query(models.Coupon).filter(
+        models.Coupon.id == assign_data.coupon_id,
+        models.Coupon.is_active == True
+    ).first()
+    
+    if coupon is None:
+        return schemas.AssignCouponResponse(
+            success=False,
+            message="优惠券不存在或已下架",
+            assigned_count=0,
+            failed_count=0,
+            failed_user_ids=[]
+        )
+    
+    now = datetime.utcnow()
+    if coupon.valid_from > now:
+        return schemas.AssignCouponResponse(
+            success=False,
+            message="优惠券尚未开始发放",
+            assigned_count=0,
+            failed_count=0,
+            failed_user_ids=[]
+        )
+    
+    if coupon.valid_to < now:
+        return schemas.AssignCouponResponse(
+            success=False,
+            message="优惠券已过期",
+            assigned_count=0,
+            failed_count=0,
+            failed_user_ids=[]
+        )
+    
+    target_users = []
+    
+    if assign_data.user_ids and len(assign_data.user_ids) > 0:
+        query = db.query(models.User).filter(
+            models.User.id.in_(assign_data.user_ids),
+            models.User.is_active == True
+        )
+        if assign_data.target_member_level:
+            query = query.filter(models.User.member_level == assign_data.target_member_level)
+        target_users = query.all()
+    else:
+        query = db.query(models.User).filter(models.User.is_active == True)
+        if assign_data.target_member_level:
+            query = query.filter(models.User.member_level == assign_data.target_member_level)
+        target_users = query.all()
+    
+    if not target_users:
+        return schemas.AssignCouponResponse(
+            success=True,
+            message="没有符合条件的用户",
+            assigned_count=0,
+            failed_count=0,
+            failed_user_ids=[]
+        )
+    
+    assigned_count = 0
+    failed_count = 0
+    failed_user_ids = []
+    
+    for user in target_users:
+        if coupon.remained_stock <= 0:
+            failed_count += 1
+            failed_user_ids.append(user.id)
+            continue
+        
+        existing_user_coupon = db.query(models.UserCoupon).filter(
+            models.UserCoupon.user_id == user.id,
+            models.UserCoupon.coupon_id == coupon.id,
+            models.UserCoupon.is_used == False
+        ).first()
+        
+        if existing_user_coupon:
+            failed_count += 1
+            failed_user_ids.append(user.id)
+            continue
+        
+        try:
+            user_coupon = models.UserCoupon(
+                user_id=user.id,
+                coupon_id=coupon.id,
+                is_used=False,
+                obtained_at=datetime.utcnow(),
+                expires_at=coupon.valid_to
+            )
+            db.add(user_coupon)
+            
+            coupon.remained_stock -= 1
+            
+            assigned_count += 1
+            
+        except Exception as e:
+            log_error(
+                message=f"给用户 [{user.id}] 发放优惠券时发生错误: {str(e)}",
+                action="ASSIGN_COUPON_ERROR",
+                tourist_id=user.id
+            )
+            failed_count += 1
+            failed_user_ids.append(user.id)
+    
+    db.commit()
+    
+    log_info(
+        message=f"管理员 [{current_admin.id}] 执行智能发券: 优惠券 {coupon.name}, 成功发放 {assigned_count} 张, 失败 {failed_count} 张",
+        action="COUPON_ASSIGNED",
+        tourist_id=current_admin.id
+    )
+    
+    audit_manager = security.get_audit_log_manager()
+    audit_manager.log_action(
+        user_id=current_admin.id,
+        module=models.AuditLogModule.ORDER,
+        action=models.AuditLogAction.CREATE,
+        target_id=coupon.id,
+        target_type="CouponAssignment",
+        details=f"管理员 {current_admin.username} 执行智能发券: 优惠券ID={coupon.id}, 成功发放 {assigned_count} 张, 失败 {failed_count} 张",
+        ip_address=request.client.host if request.client else None
+    )
+    
+    return schemas.AssignCouponResponse(
+        success=True,
+        message=f"发券完成，成功发放 {assigned_count} 张，失败 {failed_count} 张",
+        assigned_count=assigned_count,
+        failed_count=failed_count,
+        failed_user_ids=failed_user_ids
+    )
+
+
+@marketing_router.post("/time-limited-commissions", response_model=schemas.TimeLimitedCommission, status_code=status.HTTP_201_CREATED)
+def create_time_limited_commission(
+    request: Request,
+    commission_data: schemas.TimeLimitedCommissionCreate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    if commission_data.valid_to <= commission_data.valid_from:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="有效期结束时间必须晚于开始时间"
+        )
+    
+    if commission_data.commission_rate < 0 or commission_data.commission_rate > 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="佣金比例必须在 0 到 1 之间"
+        )
+    
+    if commission_data.distributor_id:
+        distributor = db.query(models.Distributor).filter(
+            models.Distributor.id == commission_data.distributor_id
+        ).first()
+        if distributor is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="指定的分销商不存在"
+            )
+    
+    if commission_data.scenic_spot_id:
+        scenic_spot = db.query(models.ScenicSpot).filter(
+            models.ScenicSpot.id == commission_data.scenic_spot_id
+        ).first()
+        if scenic_spot is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="指定的景点不存在"
+            )
+    
+    new_commission = models.TimeLimitedCommission(
+        name=commission_data.name,
+        distributor_id=commission_data.distributor_id,
+        scenic_spot_id=commission_data.scenic_spot_id,
+        commission_rate=commission_data.commission_rate,
+        valid_from=commission_data.valid_from,
+        valid_to=commission_data.valid_to,
+        is_active=commission_data.is_active
+    )
+    
+    db.add(new_commission)
+    db.commit()
+    db.refresh(new_commission)
+    
+    log_info(
+        message=f"管理员 [{current_admin.id}] 创建了限时高佣活动: {new_commission.name}",
+        action="TIME_LIMITED_COMMISSION_CREATED",
+        tourist_id=current_admin.id
+    )
+    
+    audit_manager = security.get_audit_log_manager()
+    audit_manager.log_action(
+        user_id=current_admin.id,
+        module=models.AuditLogModule.DISTRIBUTION,
+        action=models.AuditLogAction.CREATE,
+        target_id=new_commission.id,
+        target_type="TimeLimitedCommission",
+        details=f"管理员 {current_admin.username} 创建限时高佣活动: {new_commission.name}, 佣金比例: {new_commission.commission_rate * 100}%",
+        ip_address=request.client.host if request.client else None
+    )
+    
+    return new_commission
+
+
+@marketing_router.get("/time-limited-commissions", response_model=List[schemas.TimeLimitedCommission])
+def list_time_limited_commissions(
+    is_active: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    query = db.query(models.TimeLimitedCommission)
+    
+    if is_active is not None:
+        query = query.filter(models.TimeLimitedCommission.is_active == is_active)
+    
+    commissions = query.order_by(
+        models.TimeLimitedCommission.created_at.desc()
+    ).offset(skip).limit(limit).all()
+    
+    return commissions
+
+
+@marketing_router.get("/time-limited-commissions/{commission_id}", response_model=schemas.TimeLimitedCommission)
+def get_time_limited_commission(
+    commission_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_active_user)
+):
+    commission = db.query(models.TimeLimitedCommission).filter(
+        models.TimeLimitedCommission.id == commission_id
+    ).first()
+    
+    if commission is None:
+        raise HTTPException(status_code=404, detail="限时高佣活动不存在")
+    
+    return commission
+
+
+@marketing_router.put("/time-limited-commissions/{commission_id}", response_model=schemas.TimeLimitedCommission)
+def update_time_limited_commission(
+    commission_id: int,
+    commission_data: schemas.TimeLimitedCommissionUpdate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    commission = db.query(models.TimeLimitedCommission).filter(
+        models.TimeLimitedCommission.id == commission_id
+    ).first()
+    
+    if commission is None:
+        raise HTTPException(status_code=404, detail="限时高佣活动不存在")
+    
+    update_data = commission_data.model_dump(exclude_unset=True)
+    
+    for key, value in update_data.items():
+        setattr(commission, key, value)
+    
+    db.commit()
+    db.refresh(commission)
+    
+    log_info(
+        message=f"管理员 [{current_admin.id}] 更新了限时高佣活动: {commission.name}",
+        action="TIME_LIMITED_COMMISSION_UPDATED",
+        tourist_id=current_admin.id
+    )
+    
+    return commission
+
+
+@marketing_router.delete("/time-limited-commissions/{commission_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_time_limited_commission(
+    commission_id: int,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(auth.require_role(models.UserRole.ADMIN, models.UserRole.STAFF))
+):
+    commission = db.query(models.TimeLimitedCommission).filter(
+        models.TimeLimitedCommission.id == commission_id
+    ).first()
+    
+    if commission is None:
+        raise HTTPException(status_code=404, detail="限时高佣活动不存在")
+    
+    commission_name = commission.name
+    db.delete(commission)
+    db.commit()
+    
+    log_info(
+        message=f"管理员 [{current_admin.id}] 删除了限时高佣活动: {commission_name}",
+        action="TIME_LIMITED_COMMISSION_DELETED",
+        tourist_id=current_admin.id
+    )
+
+
+app.include_router(marketing_router)
 
 
 app.include_router(distributor_router)

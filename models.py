@@ -190,15 +190,32 @@ class PointLog(Base):
     user = relationship("User", back_populates="point_logs")
 
 
+class CouponType(str, Enum):
+    FIXED_AMOUNT = "满减券"
+    DISCOUNT = "折扣券"
+
+
 class Coupon(Base):
     __tablename__ = "coupons"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
-    face_value = Column(Integer, nullable=False)
-    points_required = Column(Integer, nullable=False)
+    coupon_type = Column(SQLEnum(CouponType), default=CouponType.FIXED_AMOUNT, nullable=False)
+    discount_value = Column(Float, nullable=False)
+    discount_percentage = Column(Float, nullable=True)
+    min_spend = Column(Float, default=0.0, nullable=False)
+    max_discount = Column(Float, nullable=True)
+    valid_from = Column(DateTime, nullable=False, default=datetime.utcnow)
+    valid_to = Column(DateTime, nullable=False, default=get_default_expires_at)
+    total_stock = Column(Integer, default=100, nullable=False)
+    remained_stock = Column(Integer, default=100, nullable=False)
+    points_required = Column(Integer, default=0, nullable=False)
+    target_member_level = Column(SQLEnum(MemberLevel), nullable=True)
+    target_scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    scenic_spot = relationship("ScenicSpot")
 
 
 class UserCoupon(Base):
@@ -215,6 +232,23 @@ class UserCoupon(Base):
     used_order_id = Column(Integer, ForeignKey("ticket_orders.id"), nullable=True)
 
     coupon = relationship("Coupon")
+
+
+class TimeLimitedCommission(Base):
+    __tablename__ = "time_limited_commissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    distributor_id = Column(Integer, ForeignKey("distributors.id"), nullable=True)
+    scenic_spot_id = Column(Integer, ForeignKey("scenic_spots.id"), nullable=True)
+    commission_rate = Column(Float, nullable=False)
+    valid_from = Column(DateTime, nullable=False, default=datetime.utcnow)
+    valid_to = Column(DateTime, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    distributor = relationship("Distributor")
+    scenic_spot = relationship("ScenicSpot")
 
 
 def generate_distributor_code() -> str:
