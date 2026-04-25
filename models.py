@@ -116,6 +116,12 @@ class Tourist(Base):
     tickets = relationship("Ticket", back_populates="tourist")
 
 
+class ScenicSpotStatus(str, Enum):
+    ACTIVE = "正常开放"
+    SUSPENDED = "暂停服务"
+    MAINTENANCE = "维护中"
+
+
 class ScenicSpot(Base):
     __tablename__ = "scenic_spots"
 
@@ -130,9 +136,13 @@ class ScenicSpot(Base):
     price = Column(Float, default=0.0)
     total_inventory = Column(Integer, default=100)
     remained_inventory = Column(Integer, default=100)
+    capacity = Column(Integer, default=100)
+    current_count = Column(Integer, default=0)
+    status = Column(SQLEnum(ScenicSpotStatus), default=ScenicSpotStatus.ACTIVE)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tickets = relationship("Ticket", back_populates="scenic_spot")
+    attendance_records = relationship("AttendanceRecord", back_populates="scenic_spot")
 
 
 class Ticket(Base):

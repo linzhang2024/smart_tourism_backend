@@ -23,6 +23,12 @@ class OrderStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class ScenicSpotStatus(str, Enum):
+    ACTIVE = "正常开放"
+    SUSPENDED = "暂停服务"
+    MAINTENANCE = "维护中"
+
+
 class ComplaintStatus(str, Enum):
     PENDING = "待处理"
     PROCESSING = "处理中"
@@ -121,10 +127,16 @@ class ScenicSpotBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="景点名称")
     description: Optional[str] = Field(None, description="景点描述")
     location: Optional[str] = Field(None, max_length=200, description="景点位置")
+    latitude: Optional[float] = Field(None, description="纬度")
+    longitude: Optional[float] = Field(None, description="经度")
+    geofence_radius: Optional[float] = Field(None, ge=0, description="地理围栏半径（米）")
     rating: Optional[float] = Field(0.0, ge=0, le=5, description="景点评分")
     price: Optional[float] = Field(0.0, ge=0, description="景点门票价格")
     total_inventory: Optional[int] = Field(100, ge=0, description="总库存")
     remained_inventory: Optional[int] = Field(100, ge=0, description="剩余库存")
+    capacity: Optional[int] = Field(100, ge=0, description="最大承载量")
+    current_count: Optional[int] = Field(0, ge=0, description="当前园内人数")
+    status: Optional[ScenicSpotStatus] = Field(ScenicSpotStatus.ACTIVE, description="景点状态")
 
 
 class ScenicSpotCreate(ScenicSpotBase):
@@ -135,10 +147,16 @@ class ScenicSpotUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     location: Optional[str] = Field(None, max_length=200)
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    geofence_radius: Optional[float] = Field(None, ge=0)
     rating: Optional[float] = Field(None, ge=0, le=5)
     price: Optional[float] = Field(None, ge=0)
     total_inventory: Optional[int] = Field(None, ge=0)
     remained_inventory: Optional[int] = Field(None, ge=0)
+    capacity: Optional[int] = Field(None, ge=0)
+    current_count: Optional[int] = Field(None, ge=0)
+    status: Optional[ScenicSpotStatus] = None
 
 
 class ScenicSpot(ScenicSpotBase):
@@ -985,3 +1003,34 @@ class AssignCouponResponse(BaseModel):
     assigned_count: int = 0
     failed_count: int = 0
     failed_user_ids: List[int] = []
+
+
+class HeatMapSpot(BaseModel):
+    id: int
+    name: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    capacity: int
+    current_count: int
+    saturation: float
+    status: ScenicSpotStatus
+    color_level: str
+    has_staff_on_duty: bool
+    rating: Optional[float] = None
+    price: Optional[float] = None
+
+
+class DiversionRecommendation(BaseModel):
+    from_spot_id: int
+    from_spot_name: str
+    recommended_spots: List[HeatMapSpot]
+    coupon_offer: Optional[Dict[str, Any]] = None
+
+
+class HeatMapResponse(BaseModel):
+    spots: List[HeatMapSpot]
+    diversion_recommendations: List[DiversionRecommendation]
+    generated_at: datetime
+    total_spots: int
+    crowded_spots_count: int
+    available_coupons_count: int = 0
