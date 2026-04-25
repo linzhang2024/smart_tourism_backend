@@ -490,6 +490,46 @@ def migrate_database():
                 """))
                 print("[迁移] 完成!")
             
+            print("[初始化] 检查并更新现有景点数据...")
+            try:
+                result = conn.execute(text("SELECT id, capacity, current_count, status FROM scenic_spots"))
+                spots = result.fetchall()
+                
+                updated_count = 0
+                for spot in spots:
+                    spot_id = spot[0]
+                    capacity = spot[1]
+                    current_count = spot[2]
+                    status = spot[3]
+                    
+                    needs_update = False
+                    updates = []
+                    
+                    if capacity is None:
+                        updates.append("capacity = 100")
+                        needs_update = True
+                    
+                    if current_count is None:
+                        updates.append("current_count = 0")
+                        needs_update = True
+                    
+                    if status is None or status == '':
+                        updates.append("status = '正常开放'")
+                        needs_update = True
+                    
+                    if needs_update:
+                        update_sql = f"UPDATE scenic_spots SET {', '.join(updates)} WHERE id = {spot_id}"
+                        conn.execute(text(update_sql))
+                        updated_count += 1
+                
+                if updated_count > 0:
+                    print(f"[初始化] 已更新 {updated_count} 个景点的默认数据")
+                else:
+                    print("[初始化] 所有景点数据已正确初始化")
+                
+            except Exception as e:
+                print(f"[初始化] 警告: 更新景点数据时出错: {e}")
+            
             conn.commit()
         except Exception as e:
             print(f"[迁移] 警告: {e}")
@@ -585,6 +625,20 @@ async def mask_sensitive_response(request: Request, call_next):
     response = await call_next(request)
     
     try:
+        path = request.url.path
+        
+        excluded_paths = [
+            '/gis/',
+            '/analytics/',
+            '/static/',
+            '/docs',
+            '/openapi.json'
+        ]
+        
+        for excluded in excluded_paths:
+            if path.startswith(excluded):
+                return response
+        
         if hasattr(response, 'media_type') and response.media_type == 'application/json':
             import json
             try:
@@ -599,15 +653,19 @@ async def mask_sensitive_response(request: Request, call_next):
                 if body_bytes:
                     body_str = body_bytes.decode('utf-8')
                     data = json.loads(body_str)
-                    masked_data = security.mask_response_content(data)
-                    if masked_data != data:
-                        from fastapi.responses import JSONResponse
-                        new_response = JSONResponse(content=masked_data)
-                        new_response.status_code = response.status_code
-                        for key, value in response.headers.items():
-                            if key.lower() not in ['content-length', 'content-type']:
-                                new_response.headers[key] = value
-                        return new_response
+                    
+                    try:
+                        masked_data = security.mask_response_content(data)
+                        if masked_data != data:
+                            from fastapi.responses import JSONResponse
+                            new_response = JSONResponse(content=masked_data)
+                            new_response.status_code = response.status_code
+                            for key, value in response.headers.items():
+                                if key.lower() not in ['content-length', 'content-type']:
+                                    new_response.headers[key] = value
+                            return new_response
+                    except Exception as e:
+                        pass
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
             except Exception:
@@ -1677,7 +1735,7 @@ def get_system_health(
 def get_traffic_series(
     spot_id: int, 
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_active_user)
+    current_user: models.User = Depends(auth.require_role(models.UserRole.STAFF, models.UserRole.ADMIN))
 ):
     scenic_spot = db.query(models.ScenicSpot).filter(
         models.ScenicSpot.id == spot_id
@@ -5323,32 +5381,70 @@ def get_heat_map(
     crowded_spots = []
     
     for spot in spots:
+        capacity = spot.capacity if spot.capacity is not None else 100
+        current_count = spot.current_count if spot.current_count is not None else 0
+        
         saturation = 0.0
-        if spot.capacity > 0:
-            saturation = min(spot.current_count / spot.capacity, 1.0)
+        if capacity > 0:
+            saturation = min(current_count / capacity, 1.0)
         
         has_staff = check_staff_on_duty(db, spot.id)
         
-        effective_status = spot.status
-        if not has_staff and spot.status == models.ScenicSpotStatus.ACTIVE:
+        spot_status = spot.status
+        if spot_status is None:
+            spot_status = models.ScenicSpotStatus.ACTIVE
+        
+        try:
+            status_str = str(spot_status)
+        except Exception:
+            status_str = "正常开放"
+        
+        is_active = (
+            spot_status == models.ScenicSpotStatus.ACTIVE or 
+            status_str == "正常开放" or
+            status_str == models.ScenicSpotStatus.ACTIVE.value
+        )
+        
+        effective_status = spot_status
+        if not has_staff and is_active:
             effective_status = models.ScenicSpotStatus.SUSPENDED
         
         color_level = get_color_level(saturation)
         
-        heat_map_spot = schemas.HeatMapSpot(
-            id=spot.id,
-            name=spot.name,
-            latitude=spot.latitude,
-            longitude=spot.longitude,
-            capacity=spot.capacity,
-            current_count=spot.current_count,
-            saturation=round(saturation, 2),
-            status=effective_status,
-            color_level=color_level,
-            has_staff_on_duty=has_staff,
-            rating=spot.rating,
-            price=spot.price
-        )
+        try:
+            status_value = effective_status
+            if hasattr(effective_status, 'value'):
+                status_value = effective_status.value
+            
+            heat_map_spot = schemas.HeatMapSpot(
+                id=spot.id,
+                name=spot.name,
+                latitude=spot.latitude,
+                longitude=spot.longitude,
+                capacity=capacity,
+                current_count=current_count,
+                saturation=round(saturation, 2),
+                status=status_value,
+                color_level=color_level,
+                has_staff_on_duty=has_staff,
+                rating=spot.rating,
+                price=spot.price
+            )
+        except Exception as e:
+            heat_map_spot = schemas.HeatMapSpot(
+                id=spot.id,
+                name=spot.name,
+                latitude=spot.latitude,
+                longitude=spot.longitude,
+                capacity=capacity,
+                current_count=current_count,
+                saturation=round(saturation, 2),
+                status="正常开放" if is_active else "暂停服务",
+                color_level=color_level,
+                has_staff_on_duty=has_staff,
+                rating=spot.rating,
+                price=spot.price
+            )
         
         heat_map_spots.append(heat_map_spot)
         
@@ -5372,9 +5468,12 @@ def get_heat_map(
             if other_spot.id == crowded_spot.id:
                 continue
             
+            other_capacity = other_spot.capacity if other_spot.capacity is not None else 100
+            other_current_count = other_spot.current_count if other_spot.current_count is not None else 0
+            
             other_saturation = 0.0
-            if other_spot.capacity > 0:
-                other_saturation = other_spot.current_count / other_spot.capacity
+            if other_capacity > 0:
+                other_saturation = other_current_count / other_capacity
             
             if other_saturation >= recommendation_threshold:
                 continue
@@ -5383,7 +5482,22 @@ def get_heat_map(
             if not other_has_staff:
                 continue
             
-            if other_spot.status != models.ScenicSpotStatus.ACTIVE:
+            other_spot_status = other_spot.status
+            if other_spot_status is None:
+                other_spot_status = models.ScenicSpotStatus.ACTIVE
+            
+            try:
+                other_status_str = str(other_spot_status)
+            except Exception:
+                other_status_str = "正常开放"
+            
+            is_other_active = (
+                other_spot_status == models.ScenicSpotStatus.ACTIVE or 
+                other_status_str == "正常开放" or
+                other_status_str == models.ScenicSpotStatus.ACTIVE.value
+            )
+            
+            if not is_other_active:
                 continue
             
             distance = None
@@ -5398,20 +5512,40 @@ def get_heat_map(
             
             other_color_level = get_color_level(other_saturation)
             
-            recommended_spot = schemas.HeatMapSpot(
-                id=other_spot.id,
-                name=other_spot.name,
-                latitude=other_spot.latitude,
-                longitude=other_spot.longitude,
-                capacity=other_spot.capacity,
-                current_count=other_spot.current_count,
-                saturation=round(other_saturation, 2),
-                status=other_spot.status,
-                color_level=other_color_level,
-                has_staff_on_duty=other_has_staff,
-                rating=other_spot.rating,
-                price=other_spot.price
-            )
+            try:
+                other_status_value = other_spot_status
+                if hasattr(other_spot_status, 'value'):
+                    other_status_value = other_spot_status.value
+                
+                recommended_spot = schemas.HeatMapSpot(
+                    id=other_spot.id,
+                    name=other_spot.name,
+                    latitude=other_spot.latitude,
+                    longitude=other_spot.longitude,
+                    capacity=other_capacity,
+                    current_count=other_current_count,
+                    saturation=round(other_saturation, 2),
+                    status=other_status_value,
+                    color_level=other_color_level,
+                    has_staff_on_duty=other_has_staff,
+                    rating=other_spot.rating,
+                    price=other_spot.price
+                )
+            except Exception:
+                recommended_spot = schemas.HeatMapSpot(
+                    id=other_spot.id,
+                    name=other_spot.name,
+                    latitude=other_spot.latitude,
+                    longitude=other_spot.longitude,
+                    capacity=other_capacity,
+                    current_count=other_current_count,
+                    saturation=round(other_saturation, 2),
+                    status="正常开放",
+                    color_level=other_color_level,
+                    has_staff_on_duty=other_has_staff,
+                    rating=other_spot.rating,
+                    price=other_spot.price
+                )
             
             recommended_spots.append({
                 "spot": recommended_spot,
