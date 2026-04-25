@@ -5232,6 +5232,247 @@ async def get_system_doctor_page(
     )
 
 
+def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    from math import radians, sin, cos, sqrt, atan2
+    
+    R = 6371.0
+    
+    lat1_rad = radians(lat1)
+    lon1_rad = radians(lon1)
+    lat2_rad = radians(lat2)
+    lon2_rad = radians(lon2)
+    
+    dlon = lon2_rad - lon1_rad
+    dlat = lat2_rad - lat1_rad
+    
+    a = sin(dlat / 2)**2 + cos(lat1_rad) * cos(lat2_rad) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    
+    distance = R * c
+    return distance
+
+
+def get_color_level(saturation: float) -> str:
+    if saturation < 0.4:
+        return "green"
+    elif saturation < 0.8:
+        return "yellow"
+    else:
+        return "red"
+
+
+def check_staff_on_duty(db: Session, scenic_spot_id: int) -> bool:
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    current_time = now.strftime("%H:%M")
+    
+    attendance_records = db.query(models.AttendanceRecord).filter(
+        models.AttendanceRecord.scenic_spot_id == scenic_spot_id,
+        models.AttendanceRecord.attendance_date == today_str,
+        models.AttendanceRecord.check_in_time.isnot(None),
+        models.AttendanceRecord.attendance_status.in_([
+            models.AttendanceStatus.NORMAL,
+            models.AttendanceStatus.LATE
+        ])
+    ).all()
+    
+    for record in attendance_records:
+        if record.check_out_time is None:
+            return True
+        
+        schedule = db.query(models.Schedule).filter(
+            models.Schedule.id == record.schedule_id
+        ).first()
+        
+        if schedule:
+            work_shift = db.query(models.WorkShift).filter(
+                models.WorkShift.id == schedule.work_shift_id
+            ).first()
+            
+            if work_shift:
+                if work_shift.start_time <= current_time <= work_shift.end_time:
+                    return True
+    
+    return False
+
+
+def get_available_coupons_for_spot(db: Session, scenic_spot_id: int) -> List[models.Coupon]:
+    now = datetime.utcnow()
+    coupons = db.query(models.Coupon).filter(
+        models.Coupon.target_scenic_spot_id == scenic_spot_id,
+        models.Coupon.is_active == True,
+        models.Coupon.remained_stock > 0,
+        models.Coupon.valid_from <= now,
+        models.Coupon.valid_to >= now
+    ).all()
+    return coupons
+
+
+gis_router = APIRouter(prefix="/gis", tags=["GIS热力图与智能分流"])
+
+
+@gis_router.get("/heat-map", response_model=schemas.HeatMapResponse)
+def get_heat_map(
+    db: Session = Depends(get_db),
+    diversion_threshold: float = Query(0.8, ge=0, le=1, description="分流触发阈值"),
+    recommendation_threshold: float = Query(0.4, ge=0, le=1, description="推荐景点阈值"),
+    max_recommendations: int = Query(3, ge=1, le=10, description="最大推荐数量"),
+    search_radius_km: float = Query(5.0, ge=0.1, le=50.0, description="周边搜索半径（公里）")
+):
+    spots = db.query(models.ScenicSpot).all()
+    
+    heat_map_spots = []
+    crowded_spots = []
+    
+    for spot in spots:
+        saturation = 0.0
+        if spot.capacity > 0:
+            saturation = min(spot.current_count / spot.capacity, 1.0)
+        
+        has_staff = check_staff_on_duty(db, spot.id)
+        
+        effective_status = spot.status
+        if not has_staff and spot.status == models.ScenicSpotStatus.ACTIVE:
+            effective_status = models.ScenicSpotStatus.SUSPENDED
+        
+        color_level = get_color_level(saturation)
+        
+        heat_map_spot = schemas.HeatMapSpot(
+            id=spot.id,
+            name=spot.name,
+            latitude=spot.latitude,
+            longitude=spot.longitude,
+            capacity=spot.capacity,
+            current_count=spot.current_count,
+            saturation=round(saturation, 2),
+            status=effective_status,
+            color_level=color_level,
+            has_staff_on_duty=has_staff,
+            rating=spot.rating,
+            price=spot.price
+        )
+        
+        heat_map_spots.append(heat_map_spot)
+        
+        if saturation >= diversion_threshold and spot.latitude and spot.longitude:
+            crowded_spots.append({
+                "spot": spot,
+                "heat_map_spot": heat_map_spot,
+                "saturation": saturation
+            })
+    
+    diversion_recommendations = []
+    total_available_coupons = 0
+    
+    for crowded_item in crowded_spots:
+        crowded_spot = crowded_item["spot"]
+        crowded_heat_map_spot = crowded_item["heat_map_spot"]
+        
+        recommended_spots = []
+        
+        for other_spot in spots:
+            if other_spot.id == crowded_spot.id:
+                continue
+            
+            other_saturation = 0.0
+            if other_spot.capacity > 0:
+                other_saturation = other_spot.current_count / other_spot.capacity
+            
+            if other_saturation >= recommendation_threshold:
+                continue
+            
+            other_has_staff = check_staff_on_duty(db, other_spot.id)
+            if not other_has_staff:
+                continue
+            
+            if other_spot.status != models.ScenicSpotStatus.ACTIVE:
+                continue
+            
+            distance = None
+            if crowded_spot.latitude and crowded_spot.longitude and other_spot.latitude and other_spot.longitude:
+                distance = calculate_distance(
+                    crowded_spot.latitude, crowded_spot.longitude,
+                    other_spot.latitude, other_spot.longitude
+                )
+                
+                if distance > search_radius_km:
+                    continue
+            
+            other_color_level = get_color_level(other_saturation)
+            
+            recommended_spot = schemas.HeatMapSpot(
+                id=other_spot.id,
+                name=other_spot.name,
+                latitude=other_spot.latitude,
+                longitude=other_spot.longitude,
+                capacity=other_spot.capacity,
+                current_count=other_spot.current_count,
+                saturation=round(other_saturation, 2),
+                status=other_spot.status,
+                color_level=other_color_level,
+                has_staff_on_duty=other_has_staff,
+                rating=other_spot.rating,
+                price=other_spot.price
+            )
+            
+            recommended_spots.append({
+                "spot": recommended_spot,
+                "distance": distance,
+                "rating": other_spot.rating or 0.0,
+                "saturation": other_saturation
+            })
+        
+        recommended_spots.sort(key=lambda x: (x["saturation"], -x["rating"], x["distance"] or 999))
+        
+        top_recommendations = [rs["spot"] for rs in recommended_spots[:max_recommendations]]
+        
+        coupon_offer = None
+        if top_recommendations:
+            for rec_spot in top_recommendations:
+                coupons = get_available_coupons_for_spot(db, rec_spot.id)
+                if coupons:
+                    best_coupon = max(coupons, key=lambda c: c.discount_value)
+                    total_available_coupons += len(coupons)
+                    
+                    coupon_offer = {
+                        "coupon_id": best_coupon.id,
+                        "coupon_name": best_coupon.name,
+                        "coupon_type": best_coupon.coupon_type,
+                        "discount_value": best_coupon.discount_value,
+                        "discount_percentage": best_coupon.discount_percentage,
+                        "min_spend": best_coupon.min_spend,
+                        "target_spot_id": rec_spot.id,
+                        "target_spot_name": rec_spot.name,
+                        "remained_stock": best_coupon.remained_stock,
+                        "message": f"去{rec_spot.name}游玩，可领取{best_coupon.discount_value}元优惠券！"
+                    }
+                    break
+        
+        if top_recommendations:
+            recommendation = schemas.DiversionRecommendation(
+                from_spot_id=crowded_spot.id,
+                from_spot_name=crowded_spot.name,
+                recommended_spots=top_recommendations,
+                coupon_offer=coupon_offer
+            )
+            diversion_recommendations.append(recommendation)
+    
+    crowded_count = sum(1 for spot in heat_map_spots if spot.color_level == "red")
+    
+    response = schemas.HeatMapResponse(
+        spots=heat_map_spots,
+        diversion_recommendations=diversion_recommendations,
+        generated_at=datetime.now(),
+        total_spots=len(heat_map_spots),
+        crowded_spots_count=crowded_count,
+        available_coupons_count=total_available_coupons
+    )
+    
+    return response
+
+
+app.include_router(gis_router)
+
 app.include_router(system_dashboard_router)
 
 
