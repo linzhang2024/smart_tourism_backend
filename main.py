@@ -358,6 +358,21 @@ def migrate_database():
                 conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN geofence_radius FLOAT"))
                 print("[迁移] 完成!")
             
+            if 'capacity' not in columns:
+                print("[迁移] 添加 capacity 列到 scenic_spots 表 (最大承载量)...")
+                conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN capacity INTEGER DEFAULT 100"))
+                print("[迁移] 完成!")
+            
+            if 'current_count' not in columns:
+                print("[迁移] 添加 current_count 列到 scenic_spots 表 (当前园内人数)...")
+                conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN current_count INTEGER DEFAULT 0"))
+                print("[迁移] 完成!")
+            
+            if 'status' not in columns:
+                print("[迁移] 添加 status 列到 scenic_spots 表 (景点状态)...")
+                conn.execute(text("ALTER TABLE scenic_spots ADD COLUMN status VARCHAR(20) DEFAULT '正常开放'"))
+                print("[迁移] 完成!")
+            
             result = conn.execute(text("PRAGMA table_info(users)"))
             columns = [row[1] for row in result]
             
@@ -5264,36 +5279,19 @@ def get_color_level(saturation: float) -> str:
 def check_staff_on_duty(db: Session, scenic_spot_id: int) -> bool:
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
-    current_time = now.strftime("%H:%M")
     
-    attendance_records = db.query(models.AttendanceRecord).filter(
+    active_attendance = db.query(models.AttendanceRecord).filter(
         models.AttendanceRecord.scenic_spot_id == scenic_spot_id,
         models.AttendanceRecord.attendance_date == today_str,
         models.AttendanceRecord.check_in_time.isnot(None),
+        models.AttendanceRecord.check_out_time.is_(None),
         models.AttendanceRecord.attendance_status.in_([
             models.AttendanceStatus.NORMAL,
             models.AttendanceStatus.LATE
         ])
-    ).all()
+    ).first()
     
-    for record in attendance_records:
-        if record.check_out_time is None:
-            return True
-        
-        schedule = db.query(models.Schedule).filter(
-            models.Schedule.id == record.schedule_id
-        ).first()
-        
-        if schedule:
-            work_shift = db.query(models.WorkShift).filter(
-                models.WorkShift.id == schedule.work_shift_id
-            ).first()
-            
-            if work_shift:
-                if work_shift.start_time <= current_time <= work_shift.end_time:
-                    return True
-    
-    return False
+    return active_attendance is not None
 
 
 def get_available_coupons_for_spot(db: Session, scenic_spot_id: int) -> List[models.Coupon]:
